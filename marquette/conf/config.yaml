@@ -1,27 +1,20 @@
-name: MERIT
-data_path: /data/tkb5476/data/${name}
-output_path: /data/tkb5476/projects/gridded_routing/output/${name}
+name: hydrofabric
+data_path: /data/tkb5476/projects/marquette/data/${name}
+basin: small_basin
 dx: 2000
 buffer: 0.3334
-date_codes: /data/tkb5476/data/MERIT/date_codes.json
-needs_clip: False
 crs:
   wgs: epsg:4326
   utm18: epsg:32618
-save_paths:
-  gage_locations: /mnt/sdb1/Database/PKDN/grid/gages_II_locations.csv
-  runoff_raw: ${data_path}/runoff/raw/
-  flow_lines: ${data_path}/graph/srb/srb_rivers.shp
-  runoff_dir: ${data_path}/runoff/raw/2001/2001_train/
-  runoff_clipped: ${data_path}/runoff/clipped/2001/${data.basin_name}/
-  runoff_file: ???
-  basins: ${data_path}/basins/srb/pfaf7_srb.shp
-  huc_2: ${data_path}/HUC/SRB/SRB_HUC2.shp
-csv:
-  edges:  ${output_path}/edges.csv
-  network: ${output_path}/network_matrix.csv
-  runoff_matrix: ${output_path}/runoff_matrix.csv
-  basin_matrix: ${output_path}/basin_matrix.csv
-  mass_transfer_matrix: ${output_path}/mass_transfer_matrix.csv
-  attributes: ${output_path}/attributes.csv
-  forcings: ${output_path}/_q_prime_tau_post_process.csv
+file_paths:
+  gage_locations: ${data_path}/${basin}/raw/gages_II_small_outflow.shp
+  flow_lines: ${data_path}/${basin}/raw/gages_II_small_srb.shp
+  basins: ${data_path}/${basin}/raw/huc_10_small.shp
+#csv:
+#  edges:  ${output_path}/edges.csv
+#  network: ${output_path}/network_matrix.csv
+#  runoff_matrix: ${output_path}/runoff_matrix.csv
+#  basin_matrix: ${output_path}/basin_matrix.csv
+#  mass_transfer_matrix: ${output_path}/mass_transfer_matrix.csv
+#  attributes: ${output_path}/attributes.csv
+#  forcings: ${output_path}/_q_prime_tau_post_process.csv

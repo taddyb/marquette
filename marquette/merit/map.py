@@ -5,7 +5,7 @@ import torch
 import numpy as np
 import pandas as pd
 
-from marquette._graph import data_to_csv, get_edge_counts, segments_to_edges, Segment
+from marquette.merit._graph import data_to_csv, get_edge_counts, segments_to_edges, Segment
 
 log = logging.getLogger(__name__)
 
@@ -52,11 +52,6 @@ def create_graph(cfg):
         )  # returns many edges
     ]
     edges = data_to_csv(edges_)
-
-    # Saving data to csv
-    # data_to_csv(segments).to_csv(
-    #     f"{cfg.save_path}segment_info.csv",
-    # )
     edges.to_csv(cfg.csv.edges, index=False)
 
     return edges
