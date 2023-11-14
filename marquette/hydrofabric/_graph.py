@@ -3,28 +3,25 @@ import logging
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import LineString, MultiLineString, Point
+from tqdm import tqdm
 
 log = logging.getLogger(__name__)
 
 
-class Edge:
-    def __init__(self, segment, up=None, ds=None, edge_id=None):
-        self.id = edge_id
-        self.order = segment.order
-        self.len = segment.len
-        self.len_dir = segment.len_dir
-        self.ds = ds
-        self.is_headwater = segment.is_headwater
-        self.up = up
-        # if self.up is not None:
-        #     self.up = [x for x in up if x != 0]
-        self.slope = segment.slope
-        self.sinuosity = segment.sinuosity
-        self.stream_drop = segment.stream_drop
-        self.uparea = segment.uparea
-        self.coords = segment.coords
-        self.crs = segment.crs
-        self.segment = segment
+class HydroFabricEdge:
+    def __init__(self, reach, crs, from_node=None, to_node=None, id=None):
+        self.id = id
+        self.elevation = reach.elev_mean
+        self.from_node = from_node
+        self.to_node = to_node
+        self.order = reach.StreamOrde
+        self.len = reach.LENGTHKM
+        self.area_sqkm = reach.AreaSqKM
+        self.drainage_area = reach.TotDASqKM
+        self.wbareatype = reach.wbareatype
+        self.roughness = reach.roughness
+        self.crs = crs
+        self.geometry = reach.geometry
 
     def convert_coords_to_wgs84(self):
         coords = self.coords
@@ -56,25 +53,14 @@ class Edge:
             self.uparea = prev_up_area + (area_difference * ratio)
 
 
-class Segment:
+class HydroFabricSegment:
     def __init__(self, row, segment_coords, crs):
         self.id = row["COMID"]
-        self.order = row["order_"]
-        self.len = row["lengthkm"] * 1000  # to meters
-        self.len_dir = row["lengthdir"] * 1000  # to meters
-        self.ds = row["NextDownID"]
-        self.is_headwater = False
-        if row["maxup"] > 0:
-            up = [row["up1"], row["up2"], row["up3"], row["up3"]]
-            self.up = [x for x in up if x != 0]
-        else:
-            if row["order_"] == 1:
-                self.is_headwater = True
-            self.up = []
+        self.order = row["StreamOrde"]
+        self.len = row["LENGTHKM"] * 1000  # to meters
+        self.uparea = row["TotDASqKM"]
         self.slope = row["slope"]
-        self.sinuosity = row["sinuosity"]
-        self.stream_drop = row["strmDrop_t"]
-        self.uparea = row["uparea"]
+        self.roughness = row["roughness"]
         self.coords = segment_coords
         self.crs = crs
         self.transformed_line = None
@@ -84,7 +70,7 @@ class Segment:
 def get_edge_counts(segments, dx, buffer):
     edge_counts = {}
 
-    for segment in segments:
+    for segment in tqdm(segments):
         try:
             line = LineString(segment.coords)
         except TypeError:
@@ -158,14 +144,13 @@ def get_upstream_ids(segment, edge_counts):
 def segments_to_edges(segment, edge_counts, segment_das):
     edges = []
     num_edges = edge_counts[segment.id]
-    up_ids = get_upstream_ids(segment, edge_counts)
+    # up_ids = get_upstream_ids(segment, edge_counts)
 
     """Iterating through dx edges"""
     if num_edges == 1:
         """Setting the small reaches to dx"""
-        edge = Edge(
+        edge = HydroFabricEdge(
             segment,
-            up=up_ids,
             ds=f"{segment.ds}_0",
             edge_id=f"{segment.id}_{0}",
         )
