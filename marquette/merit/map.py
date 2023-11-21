@@ -1,9 +1,10 @@
 import logging
 
 import geopandas as gpd
-import torch
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
+import torch
 
 from marquette.merit._graph import data_to_csv, get_edge_counts, segments_to_edges, Segment
 
@@ -42,14 +43,11 @@ def create_graph(cfg):
     segment_das = {
         segment.id: segment.uparea for segment in segments
     }  # Simplified with dict comprehension
-    # TODO see why this is taking so long
     edge_counts = get_edge_counts(sorted_segments, dx, buffer)
     edges_ = [
         edge
-        for segment in sorted_segments
-        for edge in segments_to_edges(
-            segment, edge_counts, segment_das
-        )  # returns many edges
+        for segment in tqdm(sorted_segments, desc="Processing segments")
+        for edge in segments_to_edges(segment, edge_counts, segment_das)  # returns many edges
     ]
     edges = data_to_csv(edges_)
     edges.to_csv(cfg.csv.edges, index=False)

@@ -36,30 +36,32 @@ def create_graph(cfg):
 
     sorted_gdf = polyline_gdf.sort_values(by="TotDASqKM", ascending=True)
     starting_point = sorted_gdf.iloc[-1]
-    edges = generate_sub_basin(cfg, starting_point, polyline_gdf, basin_segments=[])
-
-    # dx = cfg.dx  # Unit: Meters
-    # buffer = cfg.buffer * dx  # Unit: Meters
-    # sorted_segments = sorted(
-    #     segments, key=lambda segment: segment.uparea, reverse=False
-    # )
-    # segment_das = {
-    #     segment.id: segment.uparea for segment in segments
-    # }  # Simplified with dict comprehension
-    # # TODO see why this is taking so long
-    # edge_counts = get_edge_counts(sorted_segments, dx, buffer)
-    # edges_ = [
-    #     edge
-    #     for segment in sorted_segments
-    #     for edge in segments_to_edges(
-    #         segment, edge_counts, segment_das
-    #     )  # returns many edges
-    # ]
-    # edges = data_to_csv(edges_)
+    edges = []
+    generate_sub_basin(cfg, starting_point, polyline_gdf, basin_segments=edges)
+    plot_edges_vs_gdf(edges, sorted_gdf)
+    edges = data_to_csv(edges)
     # edges.to_csv(cfg.csv.edges, index=False)
 
     return edges
 
+
+def plot_edges_vs_gdf(edges, gdf):
+    line_strings = []
+    for line in edges:
+        if isinstance(line.geometry, pd.Series):
+            for geometry in line.geometry:
+                line_strings.append(geometry)
+        else:
+            line_strings.append(line.geometry)
+    fig, ax = plt.subplots()
+    gdf.plot(ax=ax, color='blue')
+    file_path = '/data/tkb5476/projects/marquette/data/plots/sorted_gdf.png'
+    plt.savefig(file_path, bbox_inches='tight')
+    fig, ax = plt.subplots()
+    line_series = gpd.GeoSeries(line_strings)
+    line_series.plot(ax=ax, color='red')
+    file_path = '/data/tkb5476/projects/marquette/data/plots/created_edges.png'
+    plt.savefig(file_path, bbox_inches='tight')
 
 def create_network(cfg, edges):
     graph_map = {row[0]: i for i, row in enumerate(edges.itertuples(index=False))}

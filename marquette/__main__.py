@@ -33,6 +33,7 @@ def extract_hydrofabric(cfg: DictConfig) -> None:
     create_network(cfg, edges)
     log.info(f"Done!")
 
+
 def extract_merit(cfg: DictConfig) -> None:
     from marquette.merit.map import create_graph, create_network
     log.info(f"Creating River Graph")
@@ -40,6 +41,7 @@ def extract_merit(cfg: DictConfig) -> None:
     log.info(f"Connecting Noes/Edges")
     create_network(cfg, edges)
     log.info(f"Done!")
+
 
 if __name__ == "__main__":
     main()

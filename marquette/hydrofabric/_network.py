@@ -47,11 +47,6 @@ def create_edges(reach, basin_segments, gdf, node_len, dx, buffer):
         basin_segments.append(edge)
 
 
-def create_edge(reach, basin_segments, gdf):
-    edge = HydroFabricEdge(reach, gdf.crs, from_node=reach.FromNode, to_node=reach.ToNode, id=reach.COMID)
-    basin_segments.append(edge)
-
-
 def calc_upstream_metrics(reach):
     upstream_node = reach.FromNode
     if isinstance(upstream_node, pd.Series) is False:
@@ -86,12 +81,18 @@ def generate_sub_basin(
                     for j in range(len(_upstream_node)):
                         upstream_edge.ToNode = reach.ToNode
                         generate_sub_basin(cfg, upstream_edge, gdf, basin_segments)
+        elif node_len > (dx + buffer):
+            create_edges(reach, basin_segments, gdf, node_len, dx, buffer)
+            log.debug("Splitting large reach into smaller pieces")
+        elif node_len <= (dx - buffer):
+            edge = HydroFabricEdge(reach, gdf.crs, from_node=reach.FromNode, to_node=reach.ToNode, id=reach.COMID)
+            edge.len = dx
+            basin_segments.append(edge)
         else:
-            if node_len > (dx + buffer):
-                create_edges(reach, basin_segments, gdf, node_len, dx, buffer)
-                log.debug("Splitting large reach into smaller pieces")
-            else:
-                create_edge(reach, basin_segments, gdf)
-            upstream_edge = gdf[gdf['ToNode'] == node]
-            if upstream_edge is not None:
-                generate_sub_basin(cfg, upstream_edge, gdf, basin_segments)
+            edge = HydroFabricEdge(reach, gdf.crs, from_node=reach.FromNode, to_node=reach.ToNode, id=reach.COMID)
+            basin_segments.append(edge)
+        upstream_edge = gdf[gdf['ToNode'] == node]
+        if upstream_edge.empty is False:
+            generate_sub_basin(cfg, upstream_edge, gdf, basin_segments)
+        else:
+            log.debug("Found a far upstream reach")

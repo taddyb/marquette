@@ -3,6 +3,7 @@ import logging
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import LineString, MultiLineString, Point
+from tqdm import tqdm
 
 log = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ class Segment:
 def get_edge_counts(segments, dx, buffer):
     edge_counts = {}
 
-    for segment in segments:
+    for segment in tqdm(segments, desc="Creating edges"):
         try:
             line = LineString(segment.coords)
         except TypeError:
