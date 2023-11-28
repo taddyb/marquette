@@ -1,7 +1,9 @@
 import logging
+from pathlib import Path
 
 import hydra
 from omegaconf import DictConfig
+import pandas as pd
 
 log = logging.getLogger(__name__)
 
@@ -29,17 +31,21 @@ def extract_hydrofabric(cfg: DictConfig) -> None:
     from marquette.hydrofabric.map import create_graph, create_network
     log.info(f"Creating River Graph")
     edges = create_graph(cfg)
-    log.info(f"Connecting Noes/Edges")
+    log.info(f"Connecting Nodes/Edges")
     create_network(cfg, edges)
     log.info(f"Done!")
 
 
 def extract_merit(cfg: DictConfig) -> None:
-    from marquette.merit.map import create_graph, create_network
-    log.info(f"Creating River Graph")
-    edges = create_graph(cfg)
-    log.info(f"Connecting Noes/Edges")
-    create_network(cfg, edges)
+    from marquette.merit.map import create_graph, map_streamflow_to_river_graph
+    edges_file = Path(cfg.csv.edges)
+    if edges_file.exists():
+        edges = pd.read_csv(edges_file)
+    else:
+        log.info(f"Creating River Graph")
+        edges = create_graph(cfg)
+    log.info(f"Mapping Streamflow to Nodes/Edges")
+    map_streamflow_to_river_graph(cfg, edges)
     log.info(f"Done!")
 
 

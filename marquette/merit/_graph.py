@@ -11,6 +11,7 @@ log = logging.getLogger(__name__)
 class Edge:
     def __init__(self, segment, up=None, ds=None, edge_id=None):
         self.id = edge_id
+        self.merit_basin = segment.id
         self.order = segment.order
         self.len = segment.len
         self.len_dir = segment.len_dir
@@ -223,6 +224,7 @@ def data_to_csv(data_list):
     for data in data_list:
         edge_dict = {
             "id": data.id,
+            "merit_basin": data.merit_basin,
             "order": data.order,
             "len": data.len,
             "len_dir": data.len_dir,

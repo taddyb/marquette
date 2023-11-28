@@ -1,9 +1,9 @@
 name: MERIT
 basin: srb
-data_path: /data/tkb5476/projects/marquette/data/${name}
+data_path: /data/tkb5476/projects/marquette/data/
 dx: 2000
 buffer: 0.3334
-date_codes: /data/tkb5476/data/MERIT/date_codes.json
+date_codes: ${data_path}/date_codes.json
 needs_clip: False
 crs:
   wgs: epsg:4326
@@ -13,12 +13,12 @@ file_paths:
   basins: ???
 save_paths:
   gage_locations: /mnt/sdb1/Database/PKDN/grid/gages_II_locations.csv
-  runoff_raw: ${data_path}/runoff/raw/
-  flow_lines: ${data_path}/graph/srb/srb_rivers.shp
-  runoff_dir: ${data_path}/runoff/raw/2001/2001_train/
-  runoff_clipped: ${data_path}/runoff/clipped/2001/${data.basin_name}/
-  runoff_file: ???
-  basins: ${data_path}/basins/srb/pfaf7_srb.shp
-  huc_2: ${data_path}/HUC/SRB/SRB_HUC2.shp
+  flow_lines: ${data_path}/${name}/graph/conus/${name}_merit_flowlines.shp
+##  basins: ${data_path}/${name}/basins/pfaf_7_merit_1053.shp
+  huc_10: /data/tkb5476/projects/marquette/data/HUC/huc_10_watersheds_${name}.shp
+  streamflow: ${data_path}/${name}/streamflow/${basin}_pre_interpolate.csv
+  huc_to_merit_tm: ${data_path}/${name}/streamflow/${basin}_huc_10_merit_TM.csv
+  merit_to_river_graph_tm: ${data_path}/${name}/streamflow/merit_to_${basin}_river_graph_TM.csv
 csv:
-  edges: ${data_path}/processed_csvs/${basin}.csv
+  edges: ${data_path}/${name}/processed_csvs/${basin}_edges.csv
+  mapped_streamflow: ${data_path}/${name}/processed_csvs/${basin}_mapped_streamflow.csv
