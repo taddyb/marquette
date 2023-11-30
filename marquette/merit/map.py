@@ -70,7 +70,7 @@ def create_graph(cfg):
         )  # returns many edges
     ]
     edges = data_to_csv(edges_)
-    edges.to_csv(cfg.csv.edges, index=False)
+    edges.to_csv(cfg.csv.edges, index=False, compression='gzip')
 
     return edges
 
@@ -94,6 +94,7 @@ def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
         mrg_TM = csr_matrix(merit_to_river_graph_TM.drop("Merit_Basins", axis=1).values)
     except KeyError:
         mrg_TM = csr_matrix(merit_to_river_graph_TM.values)
+    log.info("Reading streamflow predictions")
     streamflow_predictions = _read_flow(cfg)
     streamflow_predictions['dates'] = pd.to_datetime(streamflow_predictions['dates'])
     grouped_predictions = streamflow_predictions.groupby(streamflow_predictions['dates'].dt.year)
@@ -131,7 +132,7 @@ def _create_TM(
     """
     tm = Path(cfg.save_paths.merit_to_river_graph_tm)
     if tm.exists():
-        return pd.read_csv(tm)
+        return pd.read_csv(tm, compression='gzip')
     else:
         merit_basins = huc_to_merit_TM.columns[
             huc_to_merit_TM.columns != "HUC10"
@@ -151,36 +152,36 @@ def _create_TM(
                 data = np.zeros([merit_basins.shape[0]])
                 data[idx] = reach.len / total_length
                 df[reach.id] = data
-        df.to_csv(tm)
-        log.info(f"Wrote output to {tm}")
+        log.info("Writing TM")
+        df.to_csv(tm, compression='gzip')
         return df
 
 
 def _read_flow(cfg) -> pd.DataFrame:
     streamflow_interpolated = Path(cfg.save_paths.streamflow_interpolated)
     if streamflow_interpolated.exists():
-        return pd.read_csv(streamflow_interpolated)
+        return pd.read_csv(streamflow_interpolated, compression='gzip')
     else:
         streamflow = Path(cfg.save_paths.streamflow)
         if streamflow.exists():
-            df = pd.read_csv(streamflow)
+            df = pd.read_csv(streamflow, compression='gzip')
         else:
             df = _create_streamflow(cfg)
-            df.to_csv(streamflow, index=False)
+            df.to_csv(streamflow, index=False, compression='gzip')
     return df
 
 
 def _interpolate(cfg: DictConfig, df: pd.DataFrame, year: int) -> pd.DataFrame:
     streamflow_interpolated = Path(cfg.save_paths.streamflow_interpolated.format(year))
     if streamflow_interpolated.exists():
-        return pd.read_csv(streamflow_interpolated)
+        return pd.read_csv(streamflow_interpolated, compression='gzip')
     else:
         df['dates'] = pd.to_datetime(df['dates'])
         df.set_index('dates', inplace=True)
         df = df.resample("H").asfreq()
         df = df.interpolate(method="linear")
         df_reset = df.reset_index()
-        df_reset.to_csv(streamflow_interpolated, index=False)
+        df_reset.to_csv(streamflow_interpolated, index=False, compression='gzip')
         return df_reset
 
 

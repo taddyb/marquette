@@ -20,5 +20,5 @@ save_paths:
   huc_to_merit_tm: ${data_path}/${name}/streamflow/${basin}_huc_10_merit_TM.csv
   merit_to_river_graph_tm: ${data_path}/${name}/streamflow/merit_to_${basin}_river_graph_TM.csv
 csv:
-  edges: ${data_path}/${name}/processed_csvs/nhd/${basin}_edges.csv
-  mapped_streamflow_dir: ${data_path}/${name}/processed_csvs/nhd/
+  edges: ${data_path}/${name}/processed_csvs/dpl_v2/${basin}_edges.csv
+  mapped_streamflow_dir: ${data_path}/${name}/processed_csvs/dpl_v2/

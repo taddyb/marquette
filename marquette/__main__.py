@@ -37,7 +37,7 @@ def extract_merit(cfg: DictConfig) -> None:
     start = time.perf_counter()
     edges_file = Path(cfg.csv.edges)
     if edges_file.exists():
-        edges = pd.read_csv(edges_file)
+        edges = pd.read_csv(edges_file, compression='gzip')
     else:
         log.info(f"Creating {cfg.basin} River Graph")
         edges = create_graph(cfg)
