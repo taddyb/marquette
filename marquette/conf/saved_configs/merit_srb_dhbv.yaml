@@ -21,4 +21,4 @@ save_paths:
   merit_to_river_graph_tm: ${data_path}/${name}/streamflow/merit_to_${basin}_river_graph_TM.csv
 csv:
   edges: ${data_path}/${name}/processed_csvs/nhd/${basin}_edges.csv
-  mapped_streamflow_dir: ${data_path}/${name}/processed_csvs/dpl_v2/
+  mapped_streamflow_dir: ${data_path}/${name}/processed_csvs/nhd/

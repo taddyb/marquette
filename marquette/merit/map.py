@@ -1,6 +1,7 @@
 """It looks like there were some changes with merit basins. Keeping v1 here just in case"""
 import logging
 from pathlib import Path
+from typing import List
 
 import geopandas as gpd
 import numpy as np
@@ -93,13 +94,14 @@ def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
         mrg_TM = csr_matrix(merit_to_river_graph_TM.drop("Merit_Basins", axis=1).values)
     except KeyError:
         mrg_TM = csr_matrix(merit_to_river_graph_TM.values)
-    streamflow_predictions_interpolated = _read_interpolated(cfg)
-    streamflow_predictions_interpolated['dates'] = pd.to_datetime(streamflow_predictions_interpolated['dates'])
-    grouped_predictions = streamflow_predictions_interpolated.groupby(streamflow_predictions_interpolated['dates'].dt.year)
+    streamflow_predictions = _read_flow(cfg)
+    streamflow_predictions['dates'] = pd.to_datetime(streamflow_predictions['dates'])
+    grouped_predictions = streamflow_predictions.groupby(streamflow_predictions['dates'].dt.year)
     save_path = Path(cfg.csv.mapped_streamflow_dir)
     for year, group in tqdm(grouped_predictions, desc="writing each year's data"):
+        interpolated_flow = _interpolate(cfg, group, year)
         flow = csr_matrix(
-            group.drop("dates", axis=1)
+            interpolated_flow.drop("dates", axis=1)
             .sort_index(axis=1)
             .values
         )
@@ -108,7 +110,7 @@ def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
         mapped_flow_array = mapped_flow_river_graph.toarray()
         df = pd.DataFrame(
             mapped_flow_array,
-            index=group["dates"],
+            index=interpolated_flow["dates"],
             columns=merit_to_river_graph_TM.drop("Merit_Basins", axis=1).columns,
             dtype="float32"
         )
@@ -154,29 +156,119 @@ def _create_TM(
         return df
 
 
-def _read_interpolated(cfg) -> pd.DataFrame:
+def _read_flow(cfg) -> pd.DataFrame:
     streamflow_interpolated = Path(cfg.save_paths.streamflow_interpolated)
     if streamflow_interpolated.exists():
         return pd.read_csv(streamflow_interpolated)
     else:
         streamflow = Path(cfg.save_paths.streamflow)
-        df = pd.read_csv(streamflow)
-        if cfg.units.lower() == "mm/day":
-            df_temp = df.copy()
-            _attr = pd.read_csv(cfg.save_paths.attributes)
-            attr = _attr[["gage_ID", "area"]]
-            for idx, row in enumerate(tqdm(attr, desc="converting to m3/s")):
-                flow = df[row["gage_ID"]].values
-                area = row["area"]
-                m3s = flow * area * 1000 / 86400
-                df_temp[row["gage_ID"]] = m3s
-            df = df_temp.copy()
-            df.to_csv(streamflow.parent / f"{cfg.name}_streamflow_m3s.csv")
+        if streamflow.exists():
+            df = pd.read_csv(streamflow)
+        else:
+            df = _create_streamflow(cfg)
+            df.to_csv(streamflow, index=False)
+    return df
+
+
+def _interpolate(cfg: DictConfig, df: pd.DataFrame, year: int) -> pd.DataFrame:
+    streamflow_interpolated = Path(cfg.save_paths.streamflow_interpolated.format(year))
+    if streamflow_interpolated.exists():
+        return pd.read_csv(streamflow_interpolated)
+    else:
+        df['dates'] = pd.to_datetime(df['dates'])
+        df.set_index('dates', inplace=True)
         df = df.resample("H").asfreq()
         df = df.interpolate(method="linear")
         df_reset = df.reset_index()
-        df_reset.to_csv(streamflow_interpolated)
-    return df_reset
+        df_reset.to_csv(streamflow_interpolated, index=False)
+        return df_reset
+
+
+def _create_streamflow(cfg: DictConfig) -> pd.DataFrame:
+    """
+    extracting streamflow from many files based on HUC IDs
+    :param cfg:
+    :return:
+    """
+
+    def extract_numbers(filename):
+        """
+        Extracts the first set of numbers from the filename and returns them as an integer.
+        Assumes the filename contains numbers in the format 'xxxx_yyyy'.
+        """
+        import re
+        match = re.search(r'(\d+)_(\d+)', str(filename))
+        if match:
+            return tuple(map(int, match.groups()))
+        return (0, 0)  # Default value if no numbers are found
+    attrs_df = pd.read_csv(cfg.save_paths.attributes)
+    huc10_ids = attrs_df["gage_ID"].values.astype("str")
+    bins_size = 1000
+    bins = [huc10_ids[i:i + bins_size] for i in range(0, len(huc10_ids), bins_size)]
+    basin_hucs = gpd.read_file(cfg.save_paths.huc_10).huc10.sort_values()
+    basin_indexes = _sort_into_bins(basin_hucs.values, bins)
+    streamflow_data = []
+    columns = []
+    folder = Path(cfg.save_paths.streamflow).parent
+    file_paths = [file for file in folder.glob('*') if file.is_file()]
+    file_paths.sort(key=extract_numbers)
+    iterable = basin_indexes.keys()
+    pbar = tqdm(iterable)
+    for i, key in enumerate(pbar):
+        pbar.set_description(f"Processing Qr files")
+        values = basin_indexes[key]
+        if values:
+            file = file_paths[i]
+            df = pd.read_csv(file, dtype=np.float32, header=None)
+            for val in values:
+                id = list(val.keys())[0]
+                columns.append(id)
+                row = attrs_df[attrs_df["gage_ID"] == id]
+                row_idx = row.index[0]
+                _streamflow = df.iloc[row_idx].values
+                if cfg.units.lower() == "mm/day":
+                    # converting from mm/day to m3/s
+                    area = row["area"].values[0]
+                    _streamflow = _streamflow * area * 1000 / 86400
+                streamflow_data.append(_streamflow)
+    output = np.column_stack(streamflow_data)
+    date_range = pd.date_range(start=cfg.start_date, end=cfg.end_date, freq='D')
+    output_df = pd.DataFrame(output, columns=columns)
+    output_df["dates"] = date_range
+    return output_df
+
+
+def _sort_into_bins(ids: np.ndarray, bins: List[np.ndarray]):
+    """
+    :param ids: a list of HUC10 IDS
+    :return:
+    """
+    def find_list_of_str(target: int, sorted_lists: List[np.ndarray]):
+        left, right = 0, len(sorted_lists) - 1
+        while left <= right:
+            mid = (left + right) // 2
+            mid_list = sorted_lists[mid]
+            if mid_list.size > 0:
+                first_element = int(mid_list[0])
+                last_element = int(mid_list[-1])
+                if target < first_element:
+                    right = mid - 1
+                elif target > last_element:
+                    left = mid + 1
+                else:
+                    return mid
+            else:
+                left += 1
+        return None
+
+    keys = list(range(0, 16, 1))
+    grouped_values = {key: [] for key in keys}
+    for idx, value in enumerate(ids):
+        id = int(ids[idx])
+        _key = find_list_of_str(id, bins)
+        grouped_values[_key].append({id: idx})
+
+    return grouped_values
 
 
 def _apply_tau(cfg: DictConfig, df: pd.DataFrame) -> pd.DataFrame:

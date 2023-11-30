@@ -29,12 +29,7 @@ def main(cfg: DictConfig) -> None:
 
 
 def extract_hydrofabric(cfg: DictConfig) -> None:
-    from marquette.hydrofabric.map import create_graph, create_network
-    log.info(f"Creating River Graph")
-    edges = create_graph(cfg)
-    log.info(f"Connecting Nodes/Edges")
-    create_network(cfg, edges)
-    log.info(f"Done!")
+    log.error("NOT SUPPORTED AT THIS MOMENT")
 
 
 def extract_merit(cfg: DictConfig) -> None:
