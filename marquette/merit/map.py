@@ -1,5 +1,6 @@
 """It looks like there were some changes with merit basins. Keeping v1 here just in case"""
 import logging
+import multiprocessing
 from pathlib import Path
 from typing import List
 
@@ -70,7 +71,7 @@ def create_graph(cfg):
         )  # returns many edges
     ]
     edges = data_to_csv(edges_)
-    edges.to_csv(cfg.csv.edges, index=False, compression='gzip')
+    edges.to_csv(cfg.csv.edges, index=False, compression="gzip")
 
     return edges
 
@@ -87,24 +88,36 @@ def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
     :param edges:
     :return:
     """
-    huc_to_merit_TM = pd.read_csv(cfg.save_paths.huc_to_merit_tm)
+    huc_to_merit_TM = pd.read_csv(cfg.save_paths.huc_to_merit_tm, compression="gzip")
     hm_TM = csr_matrix(huc_to_merit_TM.drop("HUC10", axis=1).values)
     merit_to_river_graph_TM = _create_TM(cfg, edges, huc_to_merit_TM)
     try:
         mrg_TM = csr_matrix(merit_to_river_graph_TM.drop("Merit_Basins", axis=1).values)
-    except KeyError:
+    except TypeError:
         mrg_TM = csr_matrix(merit_to_river_graph_TM.values)
     log.info("Reading streamflow predictions")
     streamflow_predictions = _read_flow(cfg)
-    streamflow_predictions['dates'] = pd.to_datetime(streamflow_predictions['dates'])
-    grouped_predictions = streamflow_predictions.groupby(streamflow_predictions['dates'].dt.year)
+    streamflow_predictions["dates"] = pd.to_datetime(streamflow_predictions["dates"])
+    grouped_predictions = streamflow_predictions.groupby(
+        streamflow_predictions["dates"].dt.year
+    )
+    columns = merit_to_river_graph_TM.drop("Merit_Basins", axis=1).columns
+    args_iter = ((cfg, group, hm_TM.copy(), mrg_TM.copy(), columns) for group in grouped_predictions)
+    with multiprocessing.Pool(cfg.num_cores) as pool:
+        log.info("Writing Process to disk")
+        pool.map(_write_to_disk, args_iter)
+
+
+def _write_to_disk(args):
+    cfg, grouped_predictions, hm_TM, mrg_TM, columns = args
     save_path = Path(cfg.csv.mapped_streamflow_dir)
-    for year, group in tqdm(grouped_predictions, desc="writing each year's data"):
+    year = grouped_predictions[0]
+    group = grouped_predictions[1]
+    log.info(f"Writing data for year {year}")
+    if year == 2005:
         interpolated_flow = _interpolate(cfg, group, year)
         flow = csr_matrix(
-            interpolated_flow.drop("dates", axis=1)
-            .sort_index(axis=1)
-            .values
+            interpolated_flow.drop("dates", axis=1).sort_index(axis=1).values
         )
         mapped_flow_merit = flow.dot(hm_TM)
         mapped_flow_river_graph = mapped_flow_merit.dot(mrg_TM)
@@ -112,11 +125,13 @@ def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
         df = pd.DataFrame(
             mapped_flow_array,
             index=interpolated_flow["dates"],
-            columns=merit_to_river_graph_TM.drop("Merit_Basins", axis=1).columns,
-            dtype="float32"
+            columns=columns,
+            dtype="float32",
         )
-        df.to_csv(save_path / f"{year}_{cfg.basin}_mapped_streamflow.csv.gz", compression='gzip')
-    log.info("Wrote adjusted flow to disk")
+        df.to_csv(
+            save_path / f"{year}_{cfg.basin}_mapped_streamflow.csv.gz",
+            compression="gzip",
+        )
 
 
 def _create_TM(
@@ -132,7 +147,7 @@ def _create_TM(
     """
     tm = Path(cfg.save_paths.merit_to_river_graph_tm)
     if tm.exists():
-        return pd.read_csv(tm, compression='gzip')
+        return pd.read_csv(tm, compression="gzip")
     else:
         merit_basins = huc_to_merit_TM.columns[
             huc_to_merit_TM.columns != "HUC10"
@@ -152,36 +167,37 @@ def _create_TM(
                 data = np.zeros([merit_basins.shape[0]])
                 data[idx] = reach.len / total_length
                 df[reach.id] = data
+        df = df.reset_index()
         log.info("Writing TM")
-        df.to_csv(tm, compression='gzip')
+        df.to_csv(tm, compression="gzip", index=False)
         return df
 
 
 def _read_flow(cfg) -> pd.DataFrame:
     streamflow_interpolated = Path(cfg.save_paths.streamflow_interpolated)
     if streamflow_interpolated.exists():
-        return pd.read_csv(streamflow_interpolated, compression='gzip')
+        return pd.read_csv(streamflow_interpolated, compression="gzip")
     else:
-        streamflow = Path(cfg.save_paths.streamflow)
-        if streamflow.exists():
-            df = pd.read_csv(streamflow, compression='gzip')
+        streamflow_output = Path(cfg.save_paths.streamflow_output)
+        if streamflow_output.exists():
+            df = pd.read_csv(streamflow_output, compression="gzip")
         else:
             df = _create_streamflow(cfg)
-            df.to_csv(streamflow, index=False, compression='gzip')
+            df.to_csv(streamflow_output, index=False, compression="gzip")
     return df
 
 
 def _interpolate(cfg: DictConfig, df: pd.DataFrame, year: int) -> pd.DataFrame:
     streamflow_interpolated = Path(cfg.save_paths.streamflow_interpolated.format(year))
     if streamflow_interpolated.exists():
-        return pd.read_csv(streamflow_interpolated, compression='gzip')
+        return pd.read_csv(streamflow_interpolated, compression="gzip")
     else:
-        df['dates'] = pd.to_datetime(df['dates'])
-        df.set_index('dates', inplace=True)
+        df["dates"] = pd.to_datetime(df["dates"])
+        df.set_index("dates", inplace=True)
         df = df.resample("H").asfreq()
         df = df.interpolate(method="linear")
         df_reset = df.reset_index()
-        df_reset.to_csv(streamflow_interpolated, index=False, compression='gzip')
+        df_reset.to_csv(streamflow_interpolated, index=False, compression="gzip")
         return df_reset
 
 
@@ -198,20 +214,22 @@ def _create_streamflow(cfg: DictConfig) -> pd.DataFrame:
         Assumes the filename contains numbers in the format 'xxxx_yyyy'.
         """
         import re
-        match = re.search(r'(\d+)_(\d+)', str(filename))
+
+        match = re.search(r"(\d+)_(\d+)", str(filename))
         if match:
             return tuple(map(int, match.groups()))
         return (0, 0)  # Default value if no numbers are found
+
     attrs_df = pd.read_csv(cfg.save_paths.attributes)
     huc10_ids = attrs_df["gage_ID"].values.astype("str")
     bins_size = 1000
-    bins = [huc10_ids[i:i + bins_size] for i in range(0, len(huc10_ids), bins_size)]
+    bins = [huc10_ids[i : i + bins_size] for i in range(0, len(huc10_ids), bins_size)]
     basin_hucs = gpd.read_file(cfg.save_paths.huc_10).huc10.sort_values()
     basin_indexes = _sort_into_bins(basin_hucs.values, bins)
     streamflow_data = []
     columns = []
-    folder = Path(cfg.save_paths.streamflow).parent
-    file_paths = [file for file in folder.glob('*') if file.is_file()]
+    folder = Path(cfg.save_paths.streamflow_files)
+    file_paths = [file for file in folder.glob("*") if file.is_file()]
     file_paths.sort(key=extract_numbers)
     iterable = basin_indexes.keys()
     pbar = tqdm(iterable)
@@ -225,15 +243,20 @@ def _create_streamflow(cfg: DictConfig) -> pd.DataFrame:
                 id = list(val.keys())[0]
                 columns.append(id)
                 row = attrs_df[attrs_df["gage_ID"] == id]
-                row_idx = row.index[0]
-                _streamflow = df.iloc[row_idx].values
+                attr_idx = row.index[0]
+                try:
+                    row_idx = attr_idx - (key * 1000)
+                    _streamflow = df.iloc[row_idx].values
+                except IndexError:
+                    #  TODO SOLVE THIS for UPPER COLORADO
+                    log.error("here")
                 if cfg.units.lower() == "mm/day":
                     # converting from mm/day to m3/s
                     area = row["area"].values[0]
                     _streamflow = _streamflow * area * 1000 / 86400
                 streamflow_data.append(_streamflow)
     output = np.column_stack(streamflow_data)
-    date_range = pd.date_range(start=cfg.start_date, end=cfg.end_date, freq='D')
+    date_range = pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="D")
     output_df = pd.DataFrame(output, columns=columns)
     output_df["dates"] = date_range
     return output_df
@@ -244,6 +267,7 @@ def _sort_into_bins(ids: np.ndarray, bins: List[np.ndarray]):
     :param ids: a list of HUC10 IDS
     :return:
     """
+
     def find_list_of_str(target: int, sorted_lists: List[np.ndarray]):
         left, right = 0, len(sorted_lists) - 1
         while left <= right:
@@ -270,19 +294,3 @@ def _sort_into_bins(ids: np.ndarray, bins: List[np.ndarray]):
         grouped_values[_key].append({id: idx})
 
     return grouped_values
-
-
-def _apply_tau(cfg: DictConfig, df: pd.DataFrame) -> pd.DataFrame:
-    DATE_FORMAT = "%m/%d/%Y %H:%M"
-    try:
-        df["dates"] = pd.to_datetime(df["dates"], format=DATE_FORMAT)
-    except KeyError as e:
-        log.info("no date column. Adding one")
-        date_range = pd.date_range(
-            start="01/01/1980 00:00", end="12/31/2019 23:00", freq="H"
-        )
-        date_range = date_range[~((date_range.month == 2) & (date_range.day == 29))]
-        df["dates"] = date_range
-        df["dates"] = pd.to_datetime(df["dates"], format=DATE_FORMAT)
-    df["dates"] = df["dates"] - pd.Timedelta(hours=cfg.tau)
-    return df

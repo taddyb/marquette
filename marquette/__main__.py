@@ -34,10 +34,11 @@ def extract_hydrofabric(cfg: DictConfig) -> None:
 
 def extract_merit(cfg: DictConfig) -> None:
     from marquette.merit.map import create_graph, map_streamflow_to_river_graph
+
     start = time.perf_counter()
     edges_file = Path(cfg.csv.edges)
     if edges_file.exists():
-        edges = pd.read_csv(edges_file, compression='gzip')
+        edges = pd.read_csv(edges_file, compression="gzip")
     else:
         log.info(f"Creating {cfg.basin} River Graph")
         edges = create_graph(cfg)

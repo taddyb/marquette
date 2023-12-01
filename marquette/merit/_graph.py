@@ -51,7 +51,11 @@ class Edge:
             if not self.segment.up:
                 prev_up_area = 0
             else:
-                prev_up_area = sum(segment_das[seg] for seg in self.segment.up)
+                try:
+                    prev_up_area = sum(segment_das[seg] for seg in self.segment.up)
+                except KeyError:
+                    prev_up_area = 0
+                    log.info("Missing upstream branch. Treating as head node")
 
             ratio = (self.len * (idx + 1)) / self.segment.transformed_line.length
             area_difference = self.segment.uparea - prev_up_area
@@ -154,6 +158,7 @@ def get_upstream_ids(segment, edge_counts):
         up_ids = [f"{up}_{edge_counts[up] - 1}" for up in segment.up]
     except KeyError:
         log.error(f"KeyError with segment {segment.id}")
+        return []  # temp fix that will kill this river network and make this edge a stream with order 1
     return up_ids
 
 
