@@ -91,9 +91,9 @@ def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
     huc_to_merit_TM = pd.read_csv(cfg.save_paths.huc_to_merit_tm, compression="gzip")
     hm_TM = csr_matrix(huc_to_merit_TM.drop("HUC10", axis=1).values)
     merit_to_river_graph_TM = _create_TM(cfg, edges, huc_to_merit_TM)
-    try:
+    if "Merit_Basins" in merit_to_river_graph_TM.columns:
         mrg_TM = csr_matrix(merit_to_river_graph_TM.drop("Merit_Basins", axis=1).values)
-    except TypeError:
+    else:
         mrg_TM = csr_matrix(merit_to_river_graph_TM.values)
     log.info("Reading streamflow predictions")
     streamflow_predictions = _read_flow(cfg)
@@ -102,7 +102,10 @@ def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
         streamflow_predictions["dates"].dt.year
     )
     columns = merit_to_river_graph_TM.drop("Merit_Basins", axis=1).columns
-    args_iter = ((cfg, group, hm_TM.copy(), mrg_TM.copy(), columns) for group in grouped_predictions)
+    args_iter = (
+        (cfg, group, hm_TM.copy(), mrg_TM.copy(), columns)
+        for group in grouped_predictions
+    )
     with multiprocessing.Pool(cfg.num_cores) as pool:
         log.info("Writing Process to disk")
         pool.map(_write_to_disk, args_iter)
@@ -243,18 +246,25 @@ def _create_streamflow(cfg: DictConfig) -> pd.DataFrame:
                 id = list(val.keys())[0]
                 columns.append(id)
                 row = attrs_df[attrs_df["gage_ID"] == id]
-                attr_idx = row.index[0]
                 try:
-                    row_idx = attr_idx - (key * 1000)
-                    _streamflow = df.iloc[row_idx].values
+                    attr_idx = row.index[0]
+                    try:
+                        row_idx = attr_idx - (key * 1000)  # taking only the back three numbers
+                        _streamflow = df.iloc[row_idx].values
+                    except IndexError:
+                        #  TODO SOLVE THIS for UPPER COLORADO
+                        log.error("here")
+                    if cfg.units.lower() == "mm/day":
+                        # converting from mm/day to m3/s
+                        area = row["area"].values[0]
+                        _streamflow = _streamflow * area * 1000 / 86400
+                    streamflow_data.append(_streamflow)
                 except IndexError:
-                    #  TODO SOLVE THIS for UPPER COLORADO
-                    log.error("here")
-                if cfg.units.lower() == "mm/day":
-                    # converting from mm/day to m3/s
-                    area = row["area"].values[0]
-                    _streamflow = _streamflow * area * 1000 / 86400
-                streamflow_data.append(_streamflow)
+                    #  TODO Get the HUC values that are missing. Adding temporary fixes
+                    #  Using the previous HUC's prediction
+                    log.info(f"HUC10 {id} is missing from the attributes file")
+                    streamflow_data.append(_streamflow)
+
     output = np.column_stack(streamflow_data)
     date_range = pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="D")
     output_df = pd.DataFrame(output, columns=columns)
