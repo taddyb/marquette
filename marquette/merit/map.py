@@ -117,24 +117,22 @@ def _write_to_disk(args):
     year = grouped_predictions[0]
     group = grouped_predictions[1]
     log.info(f"Writing data for year {year}")
-    if year == 2005:
-        interpolated_flow = _interpolate(cfg, group, year)
-        flow = csr_matrix(
-            interpolated_flow.drop("dates", axis=1).sort_index(axis=1).values
-        )
-        mapped_flow_merit = flow.dot(hm_TM)
-        mapped_flow_river_graph = mapped_flow_merit.dot(mrg_TM)
-        mapped_flow_array = mapped_flow_river_graph.toarray()
-        df = pd.DataFrame(
-            mapped_flow_array,
-            index=interpolated_flow["dates"],
-            columns=columns,
-            dtype="float32",
-        )
-        df.to_csv(
-            save_path / f"{year}_{cfg.basin}_mapped_streamflow.csv.gz",
-            compression="gzip",
-        )
+    interpolated_flow = _interpolate(cfg, group, year)
+    flow = csr_matrix(interpolated_flow.drop("dates", axis=1).sort_index(axis=1).values)
+    mapped_flow_merit = flow.dot(hm_TM)
+    mapped_flow_river_graph = mapped_flow_merit.dot(mrg_TM)
+    mapped_flow_array = mapped_flow_river_graph.toarray()
+    log.info(f"Writing {year} to disk")
+    df = pd.DataFrame(
+        mapped_flow_array,
+        index=interpolated_flow["dates"],
+        columns=columns,
+        dtype="float32",
+    )
+    df.to_csv(
+        save_path / f"{year}_{cfg.basin}_mapped_streamflow.csv.gz", compression="gzip",
+    )
+    log.info(f"Done with {year}")
 
 
 def _create_TM(
@@ -249,7 +247,9 @@ def _create_streamflow(cfg: DictConfig) -> pd.DataFrame:
                 try:
                     attr_idx = row.index[0]
                     try:
-                        row_idx = attr_idx - (key * 1000)  # taking only the back three numbers
+                        row_idx = attr_idx - (
+                            key * 1000
+                        )  # taking only the back three numbers
                         _streamflow = df.iloc[row_idx].values
                     except IndexError:
                         #  TODO SOLVE THIS for UPPER COLORADO

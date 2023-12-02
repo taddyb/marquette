@@ -11,7 +11,7 @@ crs:
 is_streamflow_split: True
 start_date: 01-01-1980
 end_date: 12-31-2019
-num_cores: 20
+num_cores: 5
 save_paths:
   attributes: ${data_path}/${name}/streamflow/attributes.csv
   flow_lines: ${data_path}/${name}/graph/conus/${basin}_merit_flowlines.shp
