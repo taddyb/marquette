@@ -89,19 +89,21 @@ def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
     :return:
     """
     huc_to_merit_TM = pd.read_csv(cfg.save_paths.huc_to_merit_tm, compression="gzip")
+    huc_10_list = huc_to_merit_TM["HUC10"].values
     hm_TM = csr_matrix(huc_to_merit_TM.drop("HUC10", axis=1).values)
     merit_to_river_graph_TM = _create_TM(cfg, edges, huc_to_merit_TM)
     if "Merit_Basins" in merit_to_river_graph_TM.columns:
+        columns = merit_to_river_graph_TM.drop("Merit_Basins", axis=1).columns
         mrg_TM = csr_matrix(merit_to_river_graph_TM.drop("Merit_Basins", axis=1).values)
     else:
+        columns = merit_to_river_graph_TM.columns
         mrg_TM = csr_matrix(merit_to_river_graph_TM.values)
     log.info("Reading streamflow predictions")
-    streamflow_predictions = _read_flow(cfg)
+    streamflow_predictions = _read_flow(cfg, huc_10_list)
     streamflow_predictions["dates"] = pd.to_datetime(streamflow_predictions["dates"])
     grouped_predictions = streamflow_predictions.groupby(
         streamflow_predictions["dates"].dt.year
     )
-    columns = merit_to_river_graph_TM.drop("Merit_Basins", axis=1).columns
     args_iter = (
         (cfg, group, hm_TM.copy(), mrg_TM.copy(), columns)
         for group in grouped_predictions
@@ -114,6 +116,7 @@ def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
 def _write_to_disk(args):
     cfg, grouped_predictions, hm_TM, mrg_TM, columns = args
     save_path = Path(cfg.csv.mapped_streamflow_dir)
+    save_path.mkdir(exist_ok=True, parents=True)
     year = grouped_predictions[0]
     group = grouped_predictions[1]
     log.info(f"Writing data for year {year}")
@@ -176,17 +179,14 @@ def _create_TM(
         return df
 
 
-def _read_flow(cfg) -> pd.DataFrame:
-    streamflow_interpolated = Path(cfg.save_paths.streamflow_interpolated)
-    if streamflow_interpolated.exists():
-        return pd.read_csv(streamflow_interpolated, compression="gzip")
+def _read_flow(cfg, huc_10_list: np.ndarray) -> pd.DataFrame:
+    streamflow_output = Path(cfg.save_paths.streamflow_output)
+    if streamflow_output.exists():
+        df = pd.read_csv(streamflow_output, compression="gzip")
     else:
-        streamflow_output = Path(cfg.save_paths.streamflow_output)
-        if streamflow_output.exists():
-            df = pd.read_csv(streamflow_output, compression="gzip")
-        else:
-            df = _create_streamflow(cfg)
-            df.to_csv(streamflow_output, index=False, compression="gzip")
+        df = _create_streamflow(cfg, huc_10_list)
+        streamflow_output.parent.mkdir(exist_ok=True)
+        df.to_csv(streamflow_output, index=False, compression="gzip")
     return df
 
 
@@ -204,7 +204,7 @@ def _interpolate(cfg: DictConfig, df: pd.DataFrame, year: int) -> pd.DataFrame:
         return df_reset
 
 
-def _create_streamflow(cfg: DictConfig) -> pd.DataFrame:
+def _create_streamflow(cfg: DictConfig, huc_10_list: np.ndarray) -> pd.DataFrame:
     """
     extracting streamflow from many files based on HUC IDs
     :param cfg:
@@ -227,8 +227,8 @@ def _create_streamflow(cfg: DictConfig) -> pd.DataFrame:
     huc10_ids = attrs_df["gage_ID"].values.astype("str")
     bins_size = 1000
     bins = [huc10_ids[i : i + bins_size] for i in range(0, len(huc10_ids), bins_size)]
-    basin_hucs = gpd.read_file(cfg.save_paths.huc_10).huc10.sort_values()
-    basin_indexes = _sort_into_bins(basin_hucs.values, bins)
+    basin_hucs = huc_10_list
+    basin_indexes = _sort_into_bins(basin_hucs, bins)
     streamflow_data = []
     columns = []
     folder = Path(cfg.save_paths.streamflow_files)
@@ -264,7 +264,9 @@ def _create_streamflow(cfg: DictConfig) -> pd.DataFrame:
                 except IndexError:
                     #  TODO Get the HUC values that are missing. Adding temporary fixes
                     #  Using the previous HUC's prediction
-                    log.info(f"HUC10 {id} is missing from the attributes file")
+                    log.info(
+                        f"HUC10 {id} is missing from the attributes file. Replacing with previous HUC prediction"
+                    )
                     streamflow_data.append(_streamflow)
 
     output = np.column_stack(streamflow_data)

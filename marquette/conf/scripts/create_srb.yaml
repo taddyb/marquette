@@ -1,0 +1,9 @@
+basin_name: tennessee
+starting_edge: 73005083
+flowlines: H:/Tadd/02_raw_data/2019_MERIT/clipped_rivers/mid-atlantic.shp
+flowlines_output: H:/Tadd/02_formatted_data/flowlines/srb
+output_file: H:/Tadd/02_raw_data/2019_MERIT/intersected_with_huc10/srb
+output_TM: H:/Tadd/02_formatted_data/TMs/srb_huc_10_merit_TM.csv.gz
+huc_10s: H:/Tadd/02_raw_data/HUC10-watersheds/mid_atlantic.shp
+merit_basin_dir: H:/Tadd/02_raw_data/2019_MERIT/clipped_basins
+merit_basin_file: catchment_*.shp
