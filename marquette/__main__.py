@@ -34,6 +34,7 @@ def extract_hydrofabric(cfg: DictConfig) -> None:
 
 def extract_merit(cfg: DictConfig) -> None:
     from marquette.merit.map import create_graph, map_streamflow_to_river_graph
+    from marquette.merit.post_process import post_process
 
     start = time.perf_counter()
     edges_file = Path(cfg.csv.edges)
@@ -44,6 +45,8 @@ def extract_merit(cfg: DictConfig) -> None:
         edges = create_graph(cfg)
     log.info(f"Mapping {cfg.basin} Streamflow to Nodes/Edges")
     map_streamflow_to_river_graph(cfg, edges)
+    log.info(f"Running post-processing")
+    post_process(cfg)
     end = time.perf_counter()
     log.info(f"Extracting data took : {(end - start):.6f} seconds")
 

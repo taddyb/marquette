@@ -11,11 +11,11 @@ from tqdm import tqdm
 log = logging.getLogger(__name__)
 
 
-@hydra.main(
-    version_base=None,
-    config_path="../conf/",
-    config_name="config",
-)
+# @hydra.main(
+#     version_base=None,
+#     config_path="../conf/",
+#     config_name="config",
+# )
 def post_process(cfg: DictConfig) -> None:
     """
     Main function for running experiments.
@@ -36,6 +36,7 @@ def post_process(cfg: DictConfig) -> None:
             _process_files(file_paths[i], file_paths[i + 1])
         except gzip.BadGzipFile:
             log.info(f"Bad GZIP file. Skipping the file: {file_paths[i]}")
+
 
 def _fix_date_format(date_str):
     if len(date_str) == 10:  # Only date, no time

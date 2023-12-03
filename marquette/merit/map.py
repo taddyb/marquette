@@ -161,6 +161,8 @@ def _create_TM(
         df = df.set_index("Merit_Basins")
         for idx, id in enumerate(tqdm(merit_basins, desc="creating TM")):
             merit_reaches = edges[edges["merit_basin"] == int(id)]
+            if merit_reaches.shape[0] == 0:
+                log.error(f"Missing row for {id}")
             total_length = sum(
                 [merit_reaches.iloc[i].len for i in range(merit_reaches.shape[0])]
             )
@@ -168,7 +170,7 @@ def _create_TM(
                 data = np.zeros([merit_basins.shape[0]])
                 data[idx] = reach.len / total_length
                 df[reach.id] = data
-        df = df.reset_index()
+        # df = df.reset_index()
         log.info("Writing TM")
         df.to_csv(tm, compression="gzip", index=False)
         return df
