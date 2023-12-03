@@ -1,5 +1,5 @@
 name: MERIT
-basin: upper_mississippi
+basin: srb
 data_path: /data/tkb5476/projects/marquette/data/
 dx: 2000
 buffer: 0.3334
