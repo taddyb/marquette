@@ -1,9 +1,13 @@
 import logging
+from pathlib import Path
 
-import pandas as pd
 import geopandas as gpd
+from omegaconf import DictConfig
+import pandas as pd
 from shapely.geometry import LineString, MultiLineString, Point
 from tqdm import tqdm
+import xarray as xr
+import zarr
 
 log = logging.getLogger(__name__)
 
@@ -63,18 +67,74 @@ class Edge:
 
 
 class Segment:
+    """
+    A class to represent a river segment with geographical and hydrological attributes.
+
+    Parameters
+    ----------
+    row : dict
+        A dictionary containing the segment's data. Expected keys are:
+        'COMID' (int): Segment ID.
+        'order_' (int): Stream order.
+        'lengthkm' (float): Length of the segment in kilometers.
+        'lengthdir' (float): Direct length of the segment in kilometers.
+        'NextDownID' (int): ID of the downstream segment.
+        'maxup' (int): Maximum number of upstream segments.
+        'up1', 'up2', 'up3', 'up4' (int): IDs of upstream segments.
+        'slope' (float): Slope of the segment.
+        'sinuosity' (float): Sinuosity of the segment.
+        'strmDrop_t' (float): Total stream drop.
+        'uparea' (float): Upstream catchment area.
+    segment_coords : list of tuples
+        List of coordinate tuples (e.g., [(x1, y1), (x2, y2), ...]) representing the segment's geometry.
+    crs : str or CRS object
+        Coordinate reference system of the segment.
+
+    Attributes
+    ----------
+    id : int
+        Segment ID.
+    order : int
+        Stream order.
+    len : float
+        Length of the segment in meters.
+    len_dir : float
+        Direct length of the segment in meters.
+    ds : int
+        ID of the downstream segment.
+    is_headwater : bool
+        True if the segment is a headwater segment, otherwise False.
+    up : list of int
+        IDs of the upstream segments.
+    slope : float
+        Slope of the segment.
+    sinuosity : float
+        Sinuosity of the segment.
+    stream_drop : float
+        Total stream drop.
+    uparea : float
+        Upstream catchment area.
+    coords : list of tuples
+        List of coordinate tuples representing the segment's geometry.
+    crs : str or CRS object
+        Coordinate reference system of the segment.
+    transformed_line : type (optional)
+        Transformed line geometry, initialized as None.
+    edge_len : type (optional)
+        Edge length, initialized as None.
+    """
     def __init__(self, row, segment_coords, crs):
         self.id = row["COMID"]
-        self.order = row["order_"]
+        self.order = row["order"]
         self.len = row["lengthkm"] * 1000  # to meters
         self.len_dir = row["lengthdir"] * 1000  # to meters
         self.ds = row["NextDownID"]
         self.is_headwater = False
         if row["maxup"] > 0:
-            up = [row["up1"], row["up2"], row["up3"], row["up3"]]
+            up = [row["up1"], row["up2"], row["up3"], row["up4"]]
             self.up = [x for x in up if x != 0]
         else:
-            if row["order_"] == 1:
+            if row["order"] == 1:
                 self.is_headwater = True
             self.up = []
         self.slope = row["slope"]
@@ -244,6 +304,34 @@ def data_to_csv(data_list):
             "crs": data.crs,
         }
         data_dicts.append(edge_dict)
-
     df = pd.DataFrame(data_dicts)
     return df
+
+
+def _find_flowlines(cfg: DictConfig) -> Path:
+    """
+    A function to find the correct flowline of all MERIT basins using glob
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The cfg object
+
+    Returns
+    -------
+    Path
+        The file that we're going to create flowline connectivity for
+
+    Raises
+    ------
+    IndexError
+        Raised if no flowlines are found with your MERIT region code
+    """
+    flowline_path = Path(cfg.save_paths.flow_lines)
+    region_id = f"_{cfg.continent}{cfg.area}_"
+    matching_file = flowline_path.glob(f"*{region_id}*.shp")
+    try:
+        found_file = [file for file in matching_file][0]
+        return found_file
+    except IndexError as e:
+        raise IndexError(f"No flowlines found using: *{region_id}*.shp")

@@ -1,5 +1,4 @@
 name: MERIT
-basin: tennessee
 data_path: /data/tkb5476/projects/marquette/data/
 dx: 2000
 buffer: 0.3334
@@ -12,15 +11,18 @@ is_streamflow_split: True
 start_date: 01-01-1980
 end_date: 12-31-2019
 num_cores: 20
+continent: 7
+area: 1
+save_name: ${name}_${continent}${area}
 save_paths:
   attributes: ${data_path}/${name}/streamflow/attributes.csv
-  flow_lines: ${data_path}/${name}/graph/conus/${basin}/${basin}.shp
+  flow_lines: ${data_path}/${name}/raw/flowlines
 #  huc_10: /data/tkb5476/projects/marquette/data/HUC/${basin}.shp
   streamflow_files: ${data_path}/${name}/streamflow/dpl_v2/dHBV
-  streamflow_output: ${data_path}/${name}/streamflow/dpl_v2/${basin}/${basin}_Qr.csv
-  streamflow_interpolated: ${data_path}/${name}/streamflow/dpl_v2/${basin}/${basin}_interpolated_{}.csv.gz
-  huc_to_merit_tm: ${data_path}/${name}/streamflow/TMs/${basin}_huc_10_merit_TM.csv.gz
-  merit_to_river_graph_tm: ${data_path}/${name}/streamflow/TMs/merit_to_${basin}_river_graph_TM.csv.gz
+#  streamflow_output: ${data_path}/${name}/streamflow/dpl_v2/${basin}/${basin}_Qr.csv
+#  streamflow_interpolated: ${data_path}/${name}/streamflow/dpl_v2/${basin}/${basin}_interpolated_{}.csv.gz
+  huc_to_merit_tm: ${data_path}/${name}/streamflow/TMs/${save_name}_huc_10_merit_TM.csv.gz
+#  merit_to_river_graph_tm: ${data_path}/${name}/streamflow/TMs/merit_to_${basin}_river_graph_TM.csv.gz
 csv:
-  edges: ${data_path}/${name}/processed_csvs/dpl_v2/${basin}_edges.csv.gz
-  mapped_streamflow_dir: ${data_path}/${name}/processed_csvs/dpl_v2/${basin}
+  edges: ${data_path}/${name}/processed_csvs/dpl_v2/${save_name}_edges/
+  mapped_streamflow_dir: ${data_path}/${name}/processed_csvs/dpl_v2.1/${save_name}

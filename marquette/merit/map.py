@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from marquette.merit._graph import (
     data_to_csv,
+    _find_flowlines,
     get_edge_counts,
     segments_to_edges,
     Segment,
@@ -33,7 +34,7 @@ def _plot_gdf(gdf: gpd.GeoDataFrame) -> None:
 
 
 def create_graph(cfg):
-    flowline_file = cfg.save_paths.flow_lines
+    flowline_file = _find_flowlines(cfg)
     polyline_gdf = gpd.read_file(flowline_file)
 
     # Convert multiple columns to int type
@@ -71,7 +72,8 @@ def create_graph(cfg):
         )  # returns many edges
     ]
     edges = data_to_csv(edges_)
-    edges.to_csv(cfg.csv.edges, index=False, compression="gzip")
+    save_to_zarr(edges)
+    # edges.to_csv(cfg.csv.edges, index=False, compression="gzip")
 
     return edges
 
@@ -308,3 +310,4 @@ def _sort_into_bins(ids: np.ndarray, bins: List[np.ndarray]):
         grouped_values[_key].append({id: idx})
 
     return grouped_values
+

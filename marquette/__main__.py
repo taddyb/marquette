@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 
 
 @hydra.main(
-    version_base=None,
+    version_base="1.2",
     config_path="conf/",
     config_name="config",
 )
@@ -23,13 +23,24 @@ def main(cfg: DictConfig) -> None:
     :return: None
     """
     if cfg.name.lower() == "hydrofabric":
-        extract_hydrofabric(cfg)
+        raise ImportError("Hydrofabric functionality not yet supported")
     elif cfg.name.lower() == "merit":
-        extract_merit(cfg)
-
-
-def extract_hydrofabric(cfg: DictConfig) -> None:
-    log.error("NOT SUPPORTED AT THIS MOMENT")
+        from marquette.merit.map import create_graph, map_streamflow_to_river_graph
+        from marquette.merit.post_process import post_process
+    start = time.perf_counter()
+    edges_file = Path(cfg.csv.edges)
+    # if edges_file.exists():
+    #     edges = pd.read_csv(edges_file, compression="gzip")
+    # else:
+    log.info(f"Creating MERIT {cfg.continent}{cfg.area} River Graph")
+    edges = create_graph(cfg)
+    log.info(f"Mapping {cfg.basin} Streamflow to Nodes/Edges")
+    if _missing_files(cfg):
+        map_streamflow_to_river_graph(cfg, edges)
+    log.info(f"Running post-processing")
+    post_process(cfg)
+    end = time.perf_counter()
+    log.info(f"Extracting data took : {(end - start):.6f} seconds")
 
 
 def _missing_files(cfg: DictConfig) -> bool:
@@ -43,26 +54,6 @@ def _missing_files(cfg: DictConfig) -> bool:
         return file_count != num_years
     except FileNotFoundError:
         return True  # No predictions. Return True
-
-
-def extract_merit(cfg: DictConfig) -> None:
-    from marquette.merit.map import create_graph, map_streamflow_to_river_graph
-    from marquette.merit.post_process import post_process
-
-    start = time.perf_counter()
-    edges_file = Path(cfg.csv.edges)
-    if edges_file.exists():
-        edges = pd.read_csv(edges_file, compression="gzip")
-    else:
-        log.info(f"Creating {cfg.basin} River Graph")
-        edges = create_graph(cfg)
-    log.info(f"Mapping {cfg.basin} Streamflow to Nodes/Edges")
-    if _missing_files(cfg):
-        map_streamflow_to_river_graph(cfg, edges)
-    log.info(f"Running post-processing")
-    post_process(cfg)
-    end = time.perf_counter()
-    log.info(f"Extracting data took : {(end - start):.6f} seconds")
 
 
 if __name__ == "__main__":
