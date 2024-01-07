@@ -5,6 +5,7 @@ import time
 import hydra
 from omegaconf import DictConfig
 import pandas as pd
+import zarr
 
 log = logging.getLogger(__name__)
 
@@ -25,16 +26,16 @@ def main(cfg: DictConfig) -> None:
     if cfg.name.lower() == "hydrofabric":
         raise ImportError("Hydrofabric functionality not yet supported")
     elif cfg.name.lower() == "merit":
-        from marquette.merit.map import create_graph, map_streamflow_to_river_graph
+        from marquette.merit.map import create_edges, map_streamflow_to_river_graph
         from marquette.merit.post_process import post_process
     start = time.perf_counter()
-    edges_file = Path(cfg.csv.edges)
-    # if edges_file.exists():
-    #     edges = pd.read_csv(edges_file, compression="gzip")
-    # else:
-    log.info(f"Creating MERIT {cfg.continent}{cfg.area} River Graph")
-    edges = create_graph(cfg)
-    log.info(f"Mapping {cfg.basin} Streamflow to Nodes/Edges")
+    edges_file = Path(cfg.zarr.edges)
+    if edges_file.exists():
+        edges = zarr.open(edges_file, mode='r')
+    else:
+        log.info(f"Creating MERIT {cfg.continent}{cfg.area} River Graph")
+        edges = create_edges(cfg)
+    log.info(f"Mapping MERIT {cfg.continent}{cfg.area} Streamflow to Nodes/Edges")
     if _missing_files(cfg):
         map_streamflow_to_river_graph(cfg, edges)
     log.info(f"Running post-processing")

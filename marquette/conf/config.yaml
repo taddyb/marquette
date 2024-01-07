@@ -12,7 +12,7 @@ start_date: 01-01-1980
 end_date: 12-31-2019
 num_cores: 20
 continent: 7
-area: 1
+area: 8
 save_name: ${name}_${continent}${area}
 save_paths:
   attributes: ${data_path}/${name}/streamflow/attributes.csv
@@ -23,6 +23,7 @@ save_paths:
 #  streamflow_interpolated: ${data_path}/${name}/streamflow/dpl_v2/${basin}/${basin}_interpolated_{}.csv.gz
   huc_to_merit_tm: ${data_path}/${name}/streamflow/TMs/${save_name}_huc_10_merit_TM.csv.gz
 #  merit_to_river_graph_tm: ${data_path}/${name}/streamflow/TMs/merit_to_${basin}_river_graph_TM.csv.gz
-csv:
-  edges: ${data_path}/${name}/processed_csvs/dpl_v2/${save_name}_edges/
+zarr:
+  edges: ${data_path}/${name}/zarr/dpl_v2/${save_name}_edges/
+  sorted_edges_keys: ${data_path}/${name}/zarr/dpl_v2/${save_name}_edge_keys/
   mapped_streamflow_dir: ${data_path}/${name}/processed_csvs/dpl_v2.1/${save_name}
