@@ -36,8 +36,9 @@ def main(cfg: DictConfig) -> None:
         log.info(f"Creating MERIT {cfg.continent}{cfg.area} River Graph")
         edges = create_edges(cfg)
     log.info(f"Mapping MERIT {cfg.continent}{cfg.area} Streamflow to Nodes/Edges")
-    if _missing_files(cfg):
-        map_streamflow_to_river_graph(cfg, edges)
+    # if _missing_files(cfg):
+    #     map_streamflow_to_river_graph(cfg, edges)
+    map_streamflow_to_river_graph(cfg, edges)
     log.info(f"Running post-processing")
     post_process(cfg)
     end = time.perf_counter()
