@@ -26,21 +26,14 @@ def main(cfg: DictConfig) -> None:
     if cfg.name.lower() == "hydrofabric":
         raise ImportError("Hydrofabric functionality not yet supported")
     elif cfg.name.lower() == "merit":
-        from marquette.merit.map import create_edges, map_streamflow_to_river_graph
-        from marquette.merit.post_process import post_process
+        from marquette.merit.create import create_edges, create_TMs, write_streamflow
     start = time.perf_counter()
-    edges_file = Path(cfg.zarr.edges)
-    if edges_file.exists():
-        edges = zarr.open(edges_file, mode='r')
-    else:
-        log.info(f"Creating MERIT {cfg.continent}{cfg.area} River Graph")
-        edges = create_edges(cfg)
+    log.info(f"Creating MERIT {cfg.continent}{cfg.area} River Graph")
+    edges = create_edges(cfg)
     log.info(f"Mapping MERIT {cfg.continent}{cfg.area} Streamflow to Nodes/Edges")
-    # if _missing_files(cfg):
-    #     map_streamflow_to_river_graph(cfg, edges)
-    map_streamflow_to_river_graph(cfg, edges)
-    log.info(f"Running post-processing")
-    post_process(cfg)
+    create_TMs(cfg, edges)
+    log.info(f"Converting Streamflow to Zarr data")
+    write_streamflow(cfg)
     end = time.perf_counter()
     log.info(f"Extracting data took : {(end - start):.6f} seconds")
 

@@ -3,43 +3,31 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import geopandas as gpd
+import numpy as np
 from omegaconf import DictConfig
 import pandas as pd
 from tqdm import tqdm
+import xarray as xr
 
 
 log = logging.getLogger(__name__)
 
 
-def calculate_drainage_area(edge: Dict[str, Any], idx: int, segment_das: Dict[str, float]) -> None:
-    """
-    Calculate the drainage area for an edge.
-
-    Parameters
-    ----------
-    edge : dict
-        Dictionary representing the edge.
-    idx : int
-        Index of the edge within the segment.
-    segment_das : dict
-        Dictionary containing drainage area data for each segment.
-
-    Returns
-    -------
-    None
-        The function modifies the 'edge' dictionary in place, adding or updating
-        the 'uparea' key with the calculated drainage area.
-    """
-    prev_up_area = 0
-    if edge['up']:
-        try:
-            prev_up_area = sum(segment_das[seg] for seg in edge['up'])
-        except KeyError:
-            prev_up_area = 0
-            log.debug("Missing upstream branch. Treating as head node")
-        ratio = (edge["len"] * (idx + 1)) / edge["len_dir"]
-        area_difference = edge['uparea'] - prev_up_area
-        edge["uparea"] = prev_up_area + (area_difference * ratio)
+def calculate_drainage_area_for_all_edges(edges, segment_das):
+    num_edges = len(edges)
+    up_ids = edges[0]["up"]
+    if up_ids:
+        for idx, edge in enumerate(edges):
+            prev_up_area = sum(segment_das[seg] for seg in edge["up_merit"])
+            area_difference = edge["uparea"] - prev_up_area
+            even_distribution = area_difference / num_edges
+            edge["uparea"] = prev_up_area + even_distribution * (idx + 1)
+    else:
+        total_uparea = edges[0]["uparea"]
+        even_distribution = total_uparea / num_edges
+        for idx, edge in enumerate(edges):
+            edge["uparea"] = even_distribution * (idx + 1)
+    return edges
 
 
 def calculate_num_edges(length: float, dx: float, buffer: float) -> Tuple:
@@ -95,7 +83,9 @@ def calculate_num_edges(length: float, dx: float, buffer: float) -> Tuple:
     return (int(num_edges), edge_len)
 
 
-def create_edge_json(segment_row: pd.Series, up=None, ds=None, edge_id=None) -> Dict[str, Any]:
+def create_edge_json(
+    segment_row: pd.Series, up=None, ds=None, edge_id=None
+) -> Dict[str, Any]:
     """
     Create a JSON representation of an edge based on segment data.
 
@@ -116,20 +106,21 @@ def create_edge_json(segment_row: pd.Series, up=None, ds=None, edge_id=None) -> 
         Dictionary representing the edge with various attributes.
     """
     edge = {
-        'id': edge_id,
-        'merit_basin': segment_row['id'],
-        'segment_sorting_index': segment_row['index'],
-        'order': segment_row['order'],
-        'len': segment_row['len'],
-        'len_dir': segment_row['len_dir'],
-        'ds': ds,
-        'up': up,
-        'slope': segment_row['slope'],
-        'sinuosity': segment_row['sinuosity'],
-        'stream_drop': segment_row['stream_drop'],
-        'uparea': segment_row['uparea'],
-        'coords': segment_row['coords'],
-        'crs': segment_row['crs'],
+        "id": edge_id,
+        "merit_basin": segment_row["id"],
+        "segment_sorting_index": segment_row["index"],
+        "order": segment_row["order"],
+        "len": segment_row["len"],
+        "len_dir": segment_row["len_dir"],
+        "ds": ds,
+        "up": up,
+        "up_merit": segment_row["up"],
+        "slope": segment_row["slope"],
+        "sinuosity": segment_row["sinuosity"],
+        "stream_drop": segment_row["stream_drop"],
+        "uparea": segment_row["uparea"],
+        "coords": segment_row["coords"],
+        "crs": segment_row["crs"],
     }
     return edge
 
@@ -161,7 +152,13 @@ def create_segment(row: pd.Series, crs: Any, dx: int, buffer: float) -> Dict[str
     return create_segment_dict(row, row.geometry, crs, dx, buffer)
 
 
-def create_segment_dict(row: pd.Series, segment_coords: List[Tuple[float, float]], crs: Any, dx: int, buffer: float) -> Dict[str, Any]:
+def create_segment_dict(
+    row: pd.Series,
+    segment_coords: List[Tuple[float, float]],
+    crs: Any,
+    dx: int,
+    buffer: float,
+) -> Dict[str, Any]:
     """
     Create a dictionary representation of a segment with various attributes.
 
@@ -188,19 +185,21 @@ def create_segment_dict(row: pd.Series, segment_coords: List[Tuple[float, float]
         Dictionary containing segment attributes.
     """
     segment_dict = {
-        'id': row["COMID"],
-        'order': row["order"],
-        'len': row["lengthkm"] * 1000,  # to meters
-        'len_dir': row["lengthdir"] * 1000,  # to meters
-        'ds': row["NextDownID"],
+        "id": row["COMID"],
+        "order": row["order"],
+        "len": row["lengthkm"] * 1000,  # to meters
+        "len_dir": row["lengthdir"] * 1000,  # to meters
+        "ds": row["NextDownID"],
         # 'is_headwater': False,
-        'up': [row[key] for key in ["up1", "up2", "up3", "up4"] if row[key] != 0] if row["maxup"] > 0 else ([] if row["order"] == 1 else []),
-        'slope': row["slope"],
-        'sinuosity': row["sinuosity"],
-        'stream_drop': row["strmDrop_t"],
-        'uparea': row["uparea"],
-        'coords': segment_coords,
-        'crs': crs,
+        "up": [row[key] for key in ["up1", "up2", "up3", "up4"] if row[key] != 0]
+        if row["maxup"] > 0
+        else ([] if row["order"] == 1 else []),
+        "slope": row["slope"],
+        "sinuosity": row["sinuosity"],
+        "stream_drop": row["strmDrop_t"],
+        "uparea": row["uparea"],
+        "coords": segment_coords,
+        "crs": crs,
     }
 
     return segment_dict
@@ -222,10 +221,10 @@ def get_upstream_ids(row: pd.Series, edge_counts: int):
     list
         List of upstream segment IDs.
     """
-    if row['up'] is None:
+    if row["up"] is None:
         return []
     try:
-        up_ids = [f"{up}_{edge_counts - 1}" for up in row['up']]
+        up_ids = [f"{up}_{edge_counts - 1}" for up in row["up"]]
     except KeyError:
         log.error(f"KeyError with segment {row['id']}")
         return []
@@ -261,7 +260,9 @@ def find_flowlines(cfg: DictConfig) -> Path:
         raise IndexError(f"No flowlines found using: *{region_id}*.shp")
 
 
-def many_segment_to_edge_partition(df: pd.DataFrame, edge_info: Dict[str, Any], segment_das: Dict[str, float]) -> pd.DataFrame:
+def many_segment_to_edge_partition(
+    df: pd.DataFrame, edge_info: Dict[str, Any], segment_das: Dict[str, float]
+) -> pd.DataFrame:
     """
     Process a DataFrame partition to create edges for segments with multiple edges.
 
@@ -286,7 +287,8 @@ def many_segment_to_edge_partition(df: pd.DataFrame, edge_info: Dict[str, Any], 
     """
     all_edges = []
     for _, segment in tqdm(df.iterrows(), total=len(df), desc="Processing Segments"):
-        num_edges, edge_len = edge_info[segment['id']]
+        all_segment_edges = []
+        num_edges, edge_len = edge_info[segment["id"]]
         up_ids = get_upstream_ids(segment, num_edges)
         for i in range(num_edges):
             if i == 0:
@@ -300,17 +302,25 @@ def many_segment_to_edge_partition(df: pd.DataFrame, edge_info: Dict[str, Any], 
                 edge = create_edge_json(
                     segment,
                     up=[f"{segment['id']}_{i - 1}"],
-                    ds=f"{segment['id']}_{i + 1}" if i < num_edges - 1 else f"{segment['ds']}_0",
+                    ds=f"{segment['id']}_{i + 1}"
+                    if i < num_edges - 1
+                    else f"{segment['ds']}_0",
                     edge_id=f"{segment['id']}_{i}",
                 )
             edge["len"] = edge_len
             edge["len_dir"] = edge_len / segment["sinuosity"]
-            calculate_drainage_area(edge, i, segment_das)
+            all_segment_edges.append(edge)
+        all_segment_edges = calculate_drainage_area_for_all_edges(
+            all_segment_edges, segment_das
+        )
+        for edge in all_segment_edges:
             all_edges.append(edge)
     return pd.DataFrame(all_edges)
 
 
-def singular_segment_to_edge_partition(df: pd.DataFrame, edge_info: Dict[str, Any], segment_das: Dict[str, float]) -> pd.DataFrame:
+def singular_segment_to_edge_partition(
+    df: pd.DataFrame, edge_info: Dict[str, Any], segment_das: Dict[str, float]
+) -> pd.DataFrame:
     """
     Process a DataFrame partition to create edges for each segment.
 
@@ -335,13 +345,10 @@ def singular_segment_to_edge_partition(df: pd.DataFrame, edge_info: Dict[str, An
     all_edges = []
     num_edges = 1
     for _, segment in tqdm(df.iterrows(), total=len(df)):
-        edge_len = edge_info[segment['id']][1]
+        edge_len = edge_info[segment["id"]][1]
         up_ids = get_upstream_ids(segment, num_edges)
         edge = create_edge_json(
-            segment,
-            up=up_ids,
-            ds=f"{segment['ds']}_0",
-            edge_id=f"{segment['id']}_0",
+            segment, up=up_ids, ds=f"{segment['ds']}_0", edge_id=f"{segment['id']}_0",
         )
         edge["len"] = edge_len
         edge["len_dir"] = edge_len / segment["sinuosity"]
@@ -367,9 +374,40 @@ def _plot_gdf(gdf: gpd.GeoDataFrame) -> None:
     None
     """
     import matplotlib.pyplot as plt
+
     fig, ax = plt.subplots(figsize=(10, 10))
     gdf.plot(ax=ax)
     ax.set_title("Polyline Plot")
     ax.set_xlabel("Longitude")
     ax.set_ylabel("Latitude")
     plt.show()
+
+
+def sort_based_on_keys(array_to_sort, keys, segment_sorted_index):
+    """
+    Sort 'array_to_sort' based on the order defined in 'keys'.
+    For each key, find rows in 'segment_sorted_index' where this value occurs.
+    If there are multiple occurrences, sort these rows further by ID.
+
+    Args:
+    array_to_sort: The array to be sorted.
+    keys: The array of keys to sort by.
+    segment_sorted_index: The index array to match keys against.
+
+    Returns:
+    A sorted version of 'array_to_sort'.
+    """
+    sorted_array = []
+    for key in tqdm(keys):
+        matching_indices = np.where(segment_sorted_index == key)[0]
+        if len(matching_indices) > 1:
+            sorted_indices = np.sort(matching_indices)
+        else:
+            sorted_indices = matching_indices
+        sorted_array.extend(array_to_sort[sorted_indices])
+    return np.array(sorted_array)
+
+
+def sort_xarray_dataarray(da, keys, segment_sorted_index):
+    sorted_data = sort_based_on_keys(da.values, keys, segment_sorted_index)
+    return xr.DataArray(sorted_data, dims=da.dims, coords=da.coords)

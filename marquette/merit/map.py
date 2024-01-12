@@ -2,42 +2,41 @@
 import logging
 import multiprocessing
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import List
 
-from dask.callbacks import Callback
-import dask.dataframe as dd
-from dask.diagnostics import ProgressBar
-import dask_geopandas as dg
 import geopandas as gpd
 import numpy as np
 from omegaconf import DictConfig
 import pandas as pd
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
-import xarray as xr
-from xarray.backends import ZarrStore
-import zarr
 
-from marquette.merit._edge_calculations import (
-    calculate_num_edges,
-    create_segment,
-    find_flowlines,
-    many_segment_to_edge_partition,
-    singular_segment_to_edge_partition,
-)
-from marquette.merit._TM_calculations import (
-    create_TM,
-    join_geospatial_data,
+from marquette.merit._graph import (
+    data_to_csv,
+    get_edge_counts,
+    segments_to_edges,
+    Segment,
 )
 
 log = logging.getLogger(__name__)
 
 
-def create_edges(cfg: DictConfig) -> ZarrStore:
-    flowline_file: Path = find_flowlines(cfg)
-    polyline_gdf: gpd.GeoDataFrame = gpd.read_file(flowline_file)
-    dx: int = cfg.dx  # Unit: Meters
-    buffer: float = cfg.buffer * dx  # Unit: Meters
+def _plot_gdf(gdf: gpd.GeoDataFrame) -> None:
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    gdf.plot(ax=ax)
+    ax.set_title("Polyline Plot")
+    ax.set_xlabel("Longitude")
+    ax.set_ylabel("Latitude")
+    plt.show()
+
+
+def create_graph(cfg):
+    flowline_file = cfg.save_paths.flow_lines
+    polyline_gdf = gpd.read_file(flowline_file)
+
+    # Convert multiple columns to int type
     for col in [
         "COMID",
         "NextDownID",
@@ -46,90 +45,38 @@ def create_edges(cfg: DictConfig) -> ZarrStore:
         "up3",
         "up4",
         "maxup",
-        "order",
+        "order_",
     ]:
         polyline_gdf[col] = polyline_gdf[col].astype(int)
+
     crs = polyline_gdf.crs
-    dask_gdf = dg.from_geopandas(polyline_gdf, npartitions=48)
-    meta = pd.Series([], dtype=object)
-    with ProgressBar():
-        computed_series: dd.Series = dask_gdf.map_partitions(
-            lambda df: df.apply(create_segment, args=(crs, dx, buffer), axis=1),
-            meta=meta
-        ).compute()
 
-    segments_dict = computed_series.to_dict()
-    sorted_keys = sorted(segments_dict, key=lambda key: segments_dict[key]['uparea'])
-    segment_das = {segment['id']: segment['uparea'] for segment in segments_dict.values()}
-    num_edges_dict = {segment_["id"]: calculate_num_edges(segment_["len"], dx, buffer) for seg_id, segment_ in
-                      tqdm(segments_dict.items(), desc="Processing Number of Edges")}
-    one_edge_segment = {seg_id: edge_info for seg_id, edge_info in
-                        tqdm(num_edges_dict.items(), desc="Filtering Segments == 1") if edge_info[0] == 1}
-    many_edge_segment = {seg_id: edge_info for seg_id, edge_info in
-                          tqdm(num_edges_dict.items(), desc="Filtering Segments > 1") if edge_info[0] > 1}
-    segments_with_more_than_one_edge = {}
-    segments_with_one_edge = {}
-    for i, segment in segments_dict.items():
-        segment_id = segment["id"]
-        segment["index"] = i
+    # Generate segments using list comprehension
+    segments = [Segment(row, row.geometry, crs) for _, row in polyline_gdf.iterrows()]
 
-        if segment_id in many_edge_segment:
-            segments_with_more_than_one_edge[segment_id] = segment
-        elif segment_id in one_edge_segment:
-            segments_with_one_edge[segment_id] = segment
-        else:
-            print(f"MISSING ID: {segment_id}")
-
-    df_one = pd.DataFrame.from_dict(segments_with_one_edge, orient='index')
-    df_many = pd.DataFrame.from_dict(segments_with_more_than_one_edge, orient='index')
-    ddf_one = dd.from_pandas(df_one, npartitions=48)
-    ddf_many = dd.from_pandas(df_many, npartitions=48)
-
-    meta = pd.DataFrame({
-        'id': pd.Series(dtype='str'),
-        'merit_basin': pd.Series(dtype='int'),
-        'segment_sorting_index': pd.Series(dtype='int'),
-        'order': pd.Series(dtype='int'),
-        'len': pd.Series(dtype='float'),
-        'len_dir': pd.Series(dtype='float'),
-        'ds': pd.Series(dtype='str'),
-        'up': pd.Series(dtype='object'),  # List or array
-        'slope': pd.Series(dtype='float'),
-        'sinuosity': pd.Series(dtype='float'),
-        'stream_drop': pd.Series(dtype='float'),
-        'uparea': pd.Series(dtype='float'),
-        'coords': gpd.GeoSeries(dtype='geometry'),  # Assuming this is a geometry column
-        'crs': pd.Series(dtype='object'),  # CRS object
-    })
-
-    edges_results_one = ddf_one.map_partitions(
-        singular_segment_to_edge_partition,
-        edge_info=one_edge_segment,
-        segment_das=segment_das,
-        meta=meta
+    dx = cfg.dx  # Unit: Meters
+    buffer = cfg.buffer * dx  # Unit: Meters
+    sorted_segments = sorted(
+        segments, key=lambda segment: segment.uparea, reverse=False
     )
-    edges_results_many = ddf_many.map_partitions(
-        many_segment_to_edge_partition,
-        edge_info=many_edge_segment,
-        segment_das=segment_das,
-        meta=meta
-    )
-    for i, segment in segments_dict.items():
-        segment_id = segment["id"]
-        segment["index"] = i
-    edges_results_one_df = edges_results_one.compute()
-    edges_results_many_df = edges_results_many.compute()
-    merged_df = pd.concat([edges_results_one_df, edges_results_many_df])
-    for col in ["id", "ds", "up", "coords", "crs"]:
-        merged_df[col] = merged_df[col].astype(str)
-    xr_dataset = xr.Dataset.from_dataframe(merged_df)
-    zarr_dataset = xr_dataset.to_zarr(Path(cfg.zarr.edges), mode='w')
-    sorted_keys_array = np.array(sorted_keys)
-    zarr.save(cfg.zarr.sorted_edges_keys, sorted_keys_array)
-    return zarr_dataset
+    segment_das = {
+        segment.id: segment.uparea for segment in segments
+    }  # Simplified with dict comprehension
+    edge_counts = get_edge_counts(sorted_segments, dx, buffer)
+    edges_ = [
+        edge
+        for segment in tqdm(sorted_segments, desc="Processing segments")
+        for edge in segments_to_edges(
+            segment, edge_counts, segment_das
+        )  # returns many edges
+    ]
+    edges = data_to_csv(edges_)
+    edges.to_csv(cfg.csv.edges, index=False, compression="gzip")
+
+    return edges
 
 
-def map_streamflow_to_river_graph(cfg: DictConfig, edges: ZarrStore) -> None:
+def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
     """
     Ways to check if this is right:
       - sort each column and index row
@@ -141,13 +88,7 @@ def map_streamflow_to_river_graph(cfg: DictConfig, edges: ZarrStore) -> None:
     :param edges:
     :return:
     """
-    huc_to_merit_path = Path(cfg.zarr.TM)
-    if huc_to_merit_path.exists():
-        huc_to_merit_TM = zarr.open(huc_to_merit_path, mode='r')
-    else:
-        log.info(f"Creating HUC10 -> MERIT TM")
-        overlayed_merit_basins = join_geospatial_data(cfg)
-        huc_to_merit_TM = create_TM(cfg, overlayed_merit_basins)
+    huc_to_merit_TM = pd.read_csv(cfg.save_paths.huc_to_merit_tm, compression="gzip")
     huc_10_list = huc_to_merit_TM["HUC10"].values
     hm_TM = csr_matrix(huc_to_merit_TM.drop("HUC10", axis=1).values)
     merit_to_river_graph_TM = _create_TM(cfg, edges, huc_to_merit_TM)
@@ -170,44 +111,6 @@ def map_streamflow_to_river_graph(cfg: DictConfig, edges: ZarrStore) -> None:
     with multiprocessing.Pool(cfg.num_cores) as pool:
         log.info("Writing Process to disk")
         pool.map(_write_to_disk, args_iter)
-
-
-# def map_streamflow_to_river_graph(cfg: DictConfig, edges: ZarrStore) -> None:
-#     """
-#     Ways to check if this is right:
-#       - sort each column and index row
-#       - subtract the HUC cols from flow from the HUC index of hm_TM
-#         (f_cols.astype("int") - huc_to_merit_TM["HUC10"]).sum()
-#       - subtract the MERIT cols from hm_TM from the MERIT index of mrg_TM
-#         (hm_cols.astype("int") - merit_to_river_graph_TM["Merit_Basins"]).sum()
-#     :param cfg:
-#     :param edges:
-#     :return:
-#     """
-#
-#     huc_to_merit_TM = Path(cfg.zarr.TM)
-#     huc_10_list = huc_to_merit_TM["HUC10"].values
-#     hm_TM = csr_matrix(huc_to_merit_TM.drop("HUC10", axis=1).values)
-#     merit_to_river_graph_TM = _create_TM(cfg, edges, huc_to_merit_TM)
-#     if "Merit_Basins" in merit_to_river_graph_TM.columns:
-#         columns = merit_to_river_graph_TM.drop("Merit_Basins", axis=1).columns
-#         mrg_TM = csr_matrix(merit_to_river_graph_TM.drop("Merit_Basins", axis=1).values)
-#     else:
-#         columns = merit_to_river_graph_TM.columns
-#         mrg_TM = csr_matrix(merit_to_river_graph_TM.values)
-#     log.info("Reading streamflow predictions")
-#     streamflow_predictions = _read_flow(cfg, huc_10_list)
-#     streamflow_predictions["dates"] = pd.to_datetime(streamflow_predictions["dates"])
-#     grouped_predictions = streamflow_predictions.groupby(
-#         streamflow_predictions["dates"].dt.year
-#     )
-#     args_iter = (
-#         (cfg, group, hm_TM.copy(), mrg_TM.copy(), columns)
-#         for group in grouped_predictions
-#     )
-#     with multiprocessing.Pool(cfg.num_cores) as pool:
-#         log.info("Writing Process to disk")
-#         pool.map(_write_to_disk, args_iter)
 
 
 def _write_to_disk(args):
@@ -405,4 +308,3 @@ def _sort_into_bins(ids: np.ndarray, bins: List[np.ndarray]):
         grouped_values[_key].append({id: idx})
 
     return grouped_values
-
