@@ -13,6 +13,7 @@ end_date: "12-31-2019"
 num_cores: 20
 continent: 7
 area: 8
+num_partitions: 64
 save_name: "${name}_${continent}${area}"
 save_paths:
   attributes: "${data_path}/${name}/streamflow/attributes.csv"

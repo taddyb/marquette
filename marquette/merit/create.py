@@ -80,60 +80,64 @@ def write_streamflow(cfg: DictConfig) -> None:
     })
     write_streamflow(cfg)
     """
-    attrs_df = pd.read_csv(cfg.save_paths.attributes)
-    huc10_ids = attrs_df["gage_ID"].values.astype("str")
-    huc_to_merit_TM = zarr.open(Path(cfg.zarr.HUC_TM), mode='r')
-    huc_10_list = huc_to_merit_TM.HUC10[:]
-    bins_size = 1000
-    bins = [huc10_ids[i: i + bins_size] for i in range(0, len(huc10_ids), bins_size)]
-    basin_hucs = huc_10_list
-    basin_indexes = _sort_into_bins(basin_hucs, bins)
-    streamflow_data = []
-    columns = []
-    folder = Path(cfg.save_paths.streamflow_files)
-    file_paths = [file for file in folder.glob("*") if file.is_file()]
-    file_paths.sort(key=extract_numbers)
-    iterable = basin_indexes.keys()
-    zarr_group = zarr.open_group(Path(cfg.zarr.streamflow), mode='w')
-    zarr_group_keys = zarr.open_group(Path(cfg.zarr.streamflow_keys), mode='w')
-    pbar = tqdm(iterable)
-    for i, key in enumerate(pbar):
-        pbar.set_description(f"Processing Qr files")
-        values = basin_indexes[key]
-        if values:
-            file = file_paths[i]
-            df = pd.read_csv(file, dtype=np.float32, header=None)
-            for val in values:
-                id = list(val.keys())[0]
-                columns.append(id)
-                row = attrs_df[attrs_df["gage_ID"] == id]
-                try:
-                    attr_idx = row.index[0]
+    streamflow_zarr_path = Path(cfg.zarr.streamflow)
+    if streamflow_zarr_path.exists() is False:
+        zarr_group = zarr.open_group(streamflow_zarr_path, mode='w')
+        attrs_df = pd.read_csv(cfg.save_paths.attributes)
+        huc10_ids = attrs_df["gage_ID"].values.astype("str")
+        huc_to_merit_TM = zarr.open(Path(cfg.zarr.HUC_TM), mode='r')
+        huc_10_list = huc_to_merit_TM.HUC10[:]
+        bins_size = 1000
+        bins = [huc10_ids[i: i + bins_size] for i in range(0, len(huc10_ids), bins_size)]
+        basin_hucs = huc_10_list
+        basin_indexes = _sort_into_bins(basin_hucs, bins)
+        streamflow_data = []
+        columns = []
+        folder = Path(cfg.save_paths.streamflow_files)
+        file_paths = [file for file in folder.glob("*") if file.is_file()]
+        file_paths.sort(key=extract_numbers)
+        iterable = basin_indexes.keys()
+        zarr_group_keys = zarr.open_group(Path(cfg.zarr.streamflow_keys), mode='w')
+        pbar = tqdm(iterable)
+        for i, key in enumerate(pbar):
+            pbar.set_description(f"Processing Qr files")
+            values = basin_indexes[key]
+            if values:
+                file = file_paths[i]
+                df = pd.read_csv(file, dtype=np.float32, header=None)
+                for val in values:
+                    id = list(val.keys())[0]
+                    columns.append(id)
+                    row = attrs_df[attrs_df["gage_ID"] == id]
                     try:
-                        row_idx = attr_idx - (
-                                key * 1000
-                        )  # taking only the back three numbers
-                        _streamflow = df.iloc[row_idx].values
-                    except IndexError as e:
-                        raise e
-                    if cfg.units.lower() == "mm/day":
-                        # converting from mm/day to m3/s
-                        area = row["area"].values[0]
-                        _streamflow = _streamflow * area * 1000 / 86400
-                    streamflow_data.append(_streamflow)
-                except IndexError:
-                    log.info(
-                        f"HUC10 {id} is missing from the attributes file."
-                    )
-                    no_pred = np.zeros([14610])
-                    streamflow_data.append(no_pred)
-                    continue
-    array = np.concatenate(streamflow_data)
-    keys = np.array(columns)
-    zarr_array = zarr_group.create_dataset('HUC_predictions', shape=array.shape, dtype=array.dtype)
-    zarr_array_keys = zarr_group_keys.create_dataset('huc_keys', shape=keys.shape, dtype=keys.dtype)
-    zarr_array[:] = array
-    zarr_array_keys[:] = keys
+                        attr_idx = row.index[0]
+                        try:
+                            row_idx = attr_idx - (
+                                    key * 1000
+                            )  # taking only the back three numbers
+                            _streamflow = df.iloc[row_idx].values
+                        except IndexError as e:
+                            raise e
+                        if cfg.units.lower() == "mm/day":
+                            # converting from mm/day to m3/s
+                            area = row["area"].values[0]
+                            _streamflow = _streamflow * area * 1000 / 86400
+                        streamflow_data.append(_streamflow)
+                    except IndexError:
+                        log.info(
+                            f"HUC10 {id} is missing from the attributes file."
+                        )
+                        no_pred = np.zeros([14610])
+                        streamflow_data.append(no_pred)
+                        continue
+        array = np.concatenate(streamflow_data)
+        keys = np.array(columns)
+        zarr_array = zarr_group.create_dataset('HUC_predictions', shape=array.shape, dtype=array.dtype)
+        zarr_array_keys = zarr_group_keys.create_dataset('huc_keys', shape=keys.shape, dtype=keys.dtype)
+        zarr_array[:] = array
+        zarr_array_keys[:] = keys
+    else:
+        log.info("Streamflow data already exists in zarr format")
 
 
 def convert_streamflow(cfg: DictConfig) -> None:
@@ -196,6 +200,7 @@ def convert_streamflow(cfg: DictConfig) -> None:
 def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
     edges_file = Path(cfg.zarr.edges)
     if edges_file.exists():
+        log.info("Edge data already exists in zarr format")
         edges = zarr.open(edges_file, mode="r")
     else:
         flowline_file: Path = find_flowlines(cfg)
@@ -214,7 +219,7 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
         ]:
             polyline_gdf[col] = polyline_gdf[col].astype(int)
         crs = polyline_gdf.crs
-        dask_gdf = dg.from_geopandas(polyline_gdf, npartitions=48)
+        dask_gdf = dg.from_geopandas(polyline_gdf, npartitions=cfg.num_partitions)
         meta = pd.Series([], dtype=object)
         with ProgressBar():
             computed_series: dd.Series = dask_gdf.map_partitions(
@@ -266,8 +271,8 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
         df_many = pd.DataFrame.from_dict(
             segments_with_more_than_one_edge, orient="index"
         )
-        ddf_one = dd.from_pandas(df_one, npartitions=48)
-        ddf_many = dd.from_pandas(df_many, npartitions=48)
+        ddf_one = dd.from_pandas(df_one, npartitions=cfg.num_partitions)
+        ddf_many = dd.from_pandas(df_many, npartitions=cfg.num_partitions)
 
         meta = pd.DataFrame(
             {
@@ -329,6 +334,7 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
 def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
     huc_to_merit_path = Path(cfg.zarr.HUC_TM)
     if huc_to_merit_path.exists():
+        log.info("HUC -> MERIT data already exists in zarr format")
         huc_to_merit_TM = zarr.open(huc_to_merit_path, mode="r")
     else:
         log.info(f"Creating HUC10 -> MERIT TM")
@@ -336,6 +342,7 @@ def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
         huc_to_merit_TM = create_HUC_MERIT_TM(cfg, overlayed_merit_basins)
     merit_to_river_graph_path = Path(cfg.zarr.MERIT_TM)
     if merit_to_river_graph_path.exists():
+        log.info("MERIT -> FLOWLINE data already exists in zarr format")
         merit_to_river_graph_TM = zarr.open(merit_to_river_graph_path, mode="r")
     else:
         log.info(f"Creating MERIT -> FLOWLINE TM")
