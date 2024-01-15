@@ -32,7 +32,7 @@ def main(cfg: DictConfig) -> None:
     edges = create_edges(cfg)
     log.info(f"Mapping MERIT {cfg.continent}{cfg.area} Streamflow to Nodes/Edges")
     create_TMs(cfg, edges)
-    log.info(f"Converting Streamflow to Zarr data")
+    log.info(f"Converting Streamflow to NetCDF data")
     write_streamflow(cfg)
     end = time.perf_counter()
     log.info(f"Extracting data took : {(end - start):.6f} seconds")

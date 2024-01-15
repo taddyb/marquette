@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 
+import dask.array as da
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
 import dask_geopandas as dg
@@ -80,15 +81,16 @@ def write_streamflow(cfg: DictConfig) -> None:
     })
     write_streamflow(cfg)
     """
-    streamflow_zarr_path = Path(cfg.zarr.streamflow)
-    if streamflow_zarr_path.exists() is False:
-        zarr_group = zarr.open_group(streamflow_zarr_path, mode='w')
+    streamflow_nc_path = Path(cfg.netcdf.streamflow)
+    if streamflow_nc_path.exists() is False:
         attrs_df = pd.read_csv(cfg.save_paths.attributes)
         huc10_ids = attrs_df["gage_ID"].values.astype("str")
-        huc_to_merit_TM = zarr.open(Path(cfg.zarr.HUC_TM), mode='r')
+        huc_to_merit_TM = zarr.open(Path(cfg.zarr.HUC_TM), mode="r")
         huc_10_list = huc_to_merit_TM.HUC10[:]
         bins_size = 1000
-        bins = [huc10_ids[i: i + bins_size] for i in range(0, len(huc10_ids), bins_size)]
+        bins = [
+            huc10_ids[i : i + bins_size] for i in range(0, len(huc10_ids), bins_size)
+        ]
         basin_hucs = huc_10_list
         basin_indexes = _sort_into_bins(basin_hucs, bins)
         streamflow_data = []
@@ -97,7 +99,6 @@ def write_streamflow(cfg: DictConfig) -> None:
         file_paths = [file for file in folder.glob("*") if file.is_file()]
         file_paths.sort(key=extract_numbers)
         iterable = basin_indexes.keys()
-        zarr_group_keys = zarr.open_group(Path(cfg.zarr.streamflow_keys), mode='w')
         pbar = tqdm(iterable)
         for i, key in enumerate(pbar):
             pbar.set_description(f"Processing Qr files")
@@ -113,7 +114,7 @@ def write_streamflow(cfg: DictConfig) -> None:
                         attr_idx = row.index[0]
                         try:
                             row_idx = attr_idx - (
-                                    key * 1000
+                                key * 1000
                             )  # taking only the back three numbers
                             _streamflow = df.iloc[row_idx].values
                         except IndexError as e:
@@ -124,20 +125,24 @@ def write_streamflow(cfg: DictConfig) -> None:
                             _streamflow = _streamflow * area * 1000 / 86400
                         streamflow_data.append(_streamflow)
                     except IndexError:
-                        log.info(
-                            f"HUC10 {id} is missing from the attributes file."
-                        )
+                        log.info(f"HUC10 {id} is missing from the attributes file.")
                         no_pred = np.zeros([14610])
                         streamflow_data.append(no_pred)
                         continue
-        array = np.concatenate(streamflow_data)
-        keys = np.array(columns)
-        zarr_array = zarr_group.create_dataset('HUC_predictions', shape=array.shape, dtype=array.dtype)
-        zarr_array_keys = zarr_group_keys.create_dataset('huc_keys', shape=keys.shape, dtype=keys.dtype)
-        zarr_array[:] = array
-        zarr_array_keys[:] = keys
+        array = np.array(streamflow_data).T
+        column_keys = np.array(columns)
+        date_range = pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="D")
+        ds = xr.Dataset(
+            {"streamflow": (["time", "location"], array)},
+            coords={"time": date_range, "location": column_keys},
+        )
+        ds_interpolated = ds.interp(
+            time=pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="H"),
+            method="linear",
+        )
+        ds_interpolated.to_netcdf(Path(cfg.netcdf.streamflow))
     else:
-        log.info("Streamflow data already exists in zarr format")
+        log.info("Streamflow data already exists in netcdf format")
 
 
 def convert_streamflow(cfg: DictConfig) -> None:

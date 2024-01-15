@@ -12,7 +12,7 @@ start_date: "01-01-1980"
 end_date: "12-31-2019"
 num_cores: 20
 continent: 7
-area: 8
+area: 3
 num_partitions: 64
 save_name: "${name}_${continent}${area}"
 save_paths:
@@ -26,5 +26,6 @@ zarr:
   sorted_edges_keys: "${data_path}/${name}/zarr/graph/${save_name}_edge_keys/"
   HUC_TM: "${data_path}/${name}/zarr/TMs/PFAF_${continent}${area}"
   MERIT_TM: "${data_path}/${name}/zarr/TMs/MERIT_FLOWLINES_${continent}${area}"
-  streamflow: "${data_path}/${name}/zarr/dpl_v2/${save_name}"
   streamflow_keys: "${data_path}/${name}/zarr/dpl_v2/${save_name}_keys"
+netcdf:
+  streamflow: "${data_path}/${name}/netcdf/dpl_v2/${save_name}.nc"

@@ -3,6 +3,7 @@ import re
 from typing import List, Tuple
 
 import numpy as np
+import pandas as pd
 
 log = logging.getLogger(__name__)
 
@@ -105,3 +106,9 @@ def _sort_into_bins(ids: np.ndarray, bins: List[np.ndarray]):
         grouped_values[_key].append({id: idx})
 
     return grouped_values
+
+
+def interpolate_chunk(data_chunk, date_index):
+    df = pd.DataFrame(data_chunk, index=date_index)
+    df = df.resample('H').asfreq()
+    return df.interpolate(method='linear').values
