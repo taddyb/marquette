@@ -1,5 +1,7 @@
+import ast
 import logging
 from pathlib import Path
+import re
 from typing import Any, Dict, List, Tuple
 
 import geopandas as gpd
@@ -18,7 +20,11 @@ def calculate_drainage_area_for_all_edges(edges, segment_das):
     up_ids = edges[0]["up"]
     if up_ids:
         for idx, edge in enumerate(edges):
-            prev_up_area = sum(segment_das[seg] for seg in edge["up_merit"])
+            try:
+                prev_up_area = sum(segment_das[seg] for seg in edge["up_merit"])
+            except KeyError:
+                edge["up_merit"] = ast.literal_eval(edge["up_merit"])
+                prev_up_area = sum(segment_das[seg] for seg in edge["up_merit"])
             area_difference = edge["uparea"] - prev_up_area
             even_distribution = area_difference / num_edges
             edge["uparea"] = prev_up_area + even_distribution * (idx + 1)
@@ -149,16 +155,49 @@ def create_segment(row: pd.Series, crs: Any, dx: int, buffer: float) -> Dict[str
     dict
         Dictionary containing segment attributes.
     """
-    return create_segment_dict(row, row.geometry, crs, dx, buffer)
+    return dict(create_segment_dict(row, row.geometry, crs, dx, buffer))
 
 
-def create_segment_dict(
-    row: pd.Series,
-    segment_coords: List[Tuple[float, float]],
-    crs: Any,
-    dx: int,
-    buffer: float,
-) -> Dict[str, Any]:
+def string_to_dict_builder(input_str, crs_info):
+    """
+    Convert a string representation of a dictionary to an actual dictionary
+    using a modular approach for different sections.
+
+    Parameters:
+    input_str (str): The string to be converted.
+    crs_info (str): The CRS information to be inserted.
+
+    Returns:
+    dict: The resulting dictionary.
+    """
+
+    def handle_list(section):
+        """
+        Handles the parsing of list structures.
+        """
+        try:
+            return ast.literal_eval(section.strip())
+        except Exception as e:
+            return f"Error parsing list: {e}"
+
+    result_dict = {}
+    # Using regex to extract key-value pairs
+    pattern = r"'([^']+)':\s*((?:\[.*?\]|<.*?>|'.*?'|[^,]+)*)"
+    matches = re.findall(pattern, input_str)
+
+    for key, value in matches:
+        key = key.strip()
+        if key == 'crs':
+            result_dict[key] = crs_info
+        elif key == 'coords':
+            result_dict[key] = value.strip().strip("'")
+        else:
+            result_dict[key] = handle_list(value)
+
+    return result_dict
+
+
+def create_segment_dict(row: pd.Series, segment_coords: List[Tuple[float, float]], crs: Any, dx: int, buffer: float) -> Dict[str, Any]:
     """
     Create a dictionary representation of a segment with various attributes.
 
@@ -185,21 +224,19 @@ def create_segment_dict(
         Dictionary containing segment attributes.
     """
     segment_dict = {
-        "id": row["COMID"],
-        "order": row["order"],
-        "len": row["lengthkm"] * 1000,  # to meters
-        "len_dir": row["lengthdir"] * 1000,  # to meters
-        "ds": row["NextDownID"],
+        'id': row["COMID"],
+        'order': row["order"],
+        'len': row["lengthkm"] * 1000,  # to meters
+        'len_dir': row["lengthdir"] * 1000,  # to meters
+        'ds': row["NextDownID"],
         # 'is_headwater': False,
-        "up": [row[key] for key in ["up1", "up2", "up3", "up4"] if row[key] != 0]
-        if row["maxup"] > 0
-        else ([] if row["order"] == 1 else []),
-        "slope": row["slope"],
-        "sinuosity": row["sinuosity"],
-        "stream_drop": row["strmDrop_t"],
-        "uparea": row["uparea"],
-        "coords": segment_coords,
-        "crs": crs,
+        'up': [row[key] for key in ["up1", "up2", "up3", "up4"] if row[key] != 0] if row["maxup"] > 0 else ([] if row["order"] == 1 else []),
+        'slope': row["slope"],
+        'sinuosity': row["sinuosity"],
+        'stream_drop': row["strmDrop_t"],
+        'uparea': row["uparea"],
+        'coords': segment_coords,
+        'crs': crs,
     }
 
     return segment_dict

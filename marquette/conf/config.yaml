@@ -12,7 +12,7 @@ start_date: "01-01-1980"
 end_date: "12-31-2019"
 num_cores: 20
 continent: 7
-area: 3
+area: 1
 num_partitions: 64
 save_name: "${name}_${continent}${area}"
 save_paths:

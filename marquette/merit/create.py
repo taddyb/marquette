@@ -1,5 +1,7 @@
+import ast
 import logging
 from pathlib import Path
+from typing import Any
 
 import dask.array as da
 import dask.dataframe as dd
@@ -9,6 +11,7 @@ import geopandas as gpd
 import numpy as np
 from omegaconf import DictConfig
 import pandas as pd
+from shapely.wkt import dumps
 from tqdm import tqdm
 import xarray as xr
 import zarr
@@ -21,6 +24,7 @@ from marquette.merit._edge_calculations import (
     find_flowlines,
     many_segment_to_edge_partition,
     singular_segment_to_edge_partition,
+    string_to_dict_builder,
     sort_xarray_dataarray,
 )
 from marquette.merit._TM_calculations import (
@@ -223,22 +227,20 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
             "order",
         ]:
             polyline_gdf[col] = polyline_gdf[col].astype(int)
-        crs = polyline_gdf.crs
-        dask_gdf = dg.from_geopandas(polyline_gdf, npartitions=cfg.num_partitions)
-        meta = pd.Series([], dtype=object)
-        with ProgressBar():
-            computed_series: dd.Series = dask_gdf.map_partitions(
-                lambda df: df.apply(create_segment, args=(crs, dx, buffer), axis=1),
-                meta=meta,
-            ).compute()
-
+        crs: Any = polyline_gdf.crs
+        computed_series = polyline_gdf.apply(lambda df: create_segment(df, polyline_gdf.crs, dx, buffer), axis=1)
+        # dask_gdf = dg.from_geopandas(polyline_gdf, npartitions=cfg.num_partitions)
+        # meta = pd.Series({}, dtype=object)
+        # with ProgressBar():
+        #     computed_series: dd.Series = dask_gdf.map_partitions(
+        #         lambda df: df.apply(create_segment, args=(polyline_gdf.crs, dx, buffer), axis=1),
+        #         meta=meta
+        #     ).compute()
         segments_dict = computed_series.to_dict()
-        sorted_keys = sorted(
-            segments_dict, key=lambda key: segments_dict[key]["uparea"]
-        )
         segment_das = {
             segment["id"]: segment["uparea"] for segment in segments_dict.values()
         }
+        sorted_keys = sorted(segments_dict, key=lambda key: segments_dict[key]['uparea'])
         num_edges_dict = {
             segment_["id"]: calculate_num_edges(segment_["len"], dx, buffer)
             for seg_id, segment_ in tqdm(
@@ -294,9 +296,7 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
                 "sinuosity": pd.Series(dtype="float"),
                 "stream_drop": pd.Series(dtype="float"),
                 "uparea": pd.Series(dtype="float"),
-                "coords": gpd.GeoSeries(
-                    dtype="geometry"
-                ),  # Assuming this is a geometry column
+                "coords": pd.Series(dtype="str"),
                 "crs": pd.Series(dtype="object"),  # CRS object
             }
         )
@@ -313,9 +313,9 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
             segment_das=segment_das,
             meta=meta,
         )
-        for i, segment in segments_dict.items():
-            segment_id = segment["id"]
-            segment["index"] = i
+        # for i, segment in segments_dict.items():
+        #     segment_id = segment["id"]
+        #     segment["index"] = i
         edges_results_one_df = edges_results_one.compute()
         edges_results_many_df = edges_results_many.compute()
         merged_df = pd.concat([edges_results_one_df, edges_results_many_df])

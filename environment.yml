@@ -1,4 +1,4 @@
-name: marquette
+name: marquette_env
 channels:
   - defaults
   - conda-forge
