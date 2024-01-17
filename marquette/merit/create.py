@@ -225,7 +225,7 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
             polyline_gdf[col] = polyline_gdf[col].astype(int)
         crs = polyline_gdf.crs
         dask_gdf = dg.from_geopandas(polyline_gdf, npartitions=cfg.num_partitions)
-        meta = pd.Series([], dtype=object)
+        meta = pd.Series({}, dtype=object)
         with ProgressBar():
             computed_series: dd.Series = dask_gdf.map_partitions(
                 lambda df: df.apply(create_segment, args=(crs, dx, buffer), axis=1),
