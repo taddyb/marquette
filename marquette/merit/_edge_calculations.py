@@ -261,6 +261,8 @@ def get_upstream_ids(row: pd.Series, edge_counts: int):
     if row["up"] is None:
         return []
     try:
+        if isinstance(row["up"], str):
+            row["up"] = ast.literal_eval(row["up"])
         up_ids = [f"{up}_{edge_counts - 1}" for up in row["up"]]
     except KeyError:
         log.error(f"KeyError with segment {row['id']}")

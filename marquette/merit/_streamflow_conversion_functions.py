@@ -1,9 +1,14 @@
 import logging
+from pathlib import Path
 import re
 from typing import List, Tuple
 
+from omegaconf import DictConfig
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
+import xarray as xr
+import zarr
 
 log = logging.getLogger(__name__)
 
@@ -103,9 +108,105 @@ def _sort_into_bins(ids: np.ndarray, bins: List[np.ndarray]):
     for idx, value in enumerate(ids):
         id = int(ids[idx])
         _key = find_list_of_str(id, bins)
-        grouped_values[_key].append({id: idx})
-
+        try:
+            grouped_values[_key].append({id: idx})
+        except KeyError:
+            log.debug("ignoring this key")
     return grouped_values
+
+
+def calculate_from_individual_files(cfg: DictConfig):
+    def process_file(file_path, id_to_area, default_area):
+        data = np.load(file_path)
+        file_id = file_path.stem
+        area = id_to_area.get(file_id, default_area)
+        data = data * area * 1000 / 86400
+        return file_id, data
+    attrs_df = pd.read_csv(cfg.save_paths.attributes)
+    attrs_df['gage_ID'] = attrs_df['gage_ID'].astype(str).str.zfill(10)  # Left padding a 0 to make sure that all gages can be read
+    id_to_area = attrs_df.set_index('gage_ID')['area'].to_dict()
+    mean_area = attrs_df['area'].mean()
+    streamflow_path = Path(cfg.zarr.streamflow)
+    huc_to_merit_TM = zarr.open(Path(cfg.zarr.HUC_TM), mode="r")
+    huc_10_list = huc_to_merit_TM.HUC10[:]
+    streamflow_files_path = Path(cfg.save_paths.streamflow_files)
+    huc_10_set = set(huc_10_list)
+    matching_files = [f for f in streamflow_files_path.glob('*.npy') if f.stem in huc_10_set]
+    processed_data = [process_file(file_path, id_to_area, mean_area) for file_path in matching_files]
+    columns = [item[0] for item in processed_data]
+    streamflow_predictions = [item[1].squeeze() for item in processed_data]
+    array = np.array(streamflow_predictions).T
+    column_keys = np.array(columns)
+    date_range = pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="D")
+    ds = xr.Dataset(
+        {"streamflow": (["time", "location"], array)},
+        coords={"time": date_range, "location": column_keys},
+    )
+    ds_interpolated = ds.interp(
+        time=pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="H"),
+        method="linear",
+    )
+    zgroup = ds_interpolated.to_zarr(Path(cfg.zarr.streamflow))
+
+def calculate_from_qr_files(cfg: DictConfig):
+    attrs_df = pd.read_csv(cfg.save_paths.attributes)
+    huc10_ids = attrs_df["gage_ID"].values.astype("str")
+    huc_to_merit_TM = zarr.open(Path(cfg.zarr.HUC_TM), mode="r")
+    huc_10_list = huc_to_merit_TM.HUC10[:]
+    bins_size = 1000
+    bins = [
+        huc10_ids[i: i + bins_size] for i in range(0, len(huc10_ids), bins_size)
+    ]
+    basin_hucs = huc_10_list
+    basin_indexes = _sort_into_bins(basin_hucs, bins)
+    streamflow_data = []
+    columns = []
+    folder = Path(cfg.save_paths.streamflow_files)
+    file_paths = [file for file in folder.glob("*") if file.is_file()]
+    file_paths.sort(key=extract_numbers)
+    iterable = basin_indexes.keys()
+    pbar = tqdm(iterable)
+    for i, key in enumerate(pbar):
+        pbar.set_description(f"Processing Qr files")
+        values = basin_indexes[key]
+        if values:
+            file = file_paths[i]
+            df = pd.read_csv(file, dtype=np.float32, header=None)
+            for val in values:
+                id = list(val.keys())[0]
+                columns.append(id)
+                row = attrs_df[attrs_df["gage_ID"] == id]
+                try:
+                    attr_idx = row.index[0]
+                    try:
+                        row_idx = attr_idx - (
+                                key * 1000
+                        )  # taking only the back three numbers
+                        _streamflow = df.iloc[row_idx].values
+                    except IndexError as e:
+                        raise e
+                    if cfg.units.lower() == "mm/day":
+                        # converting from mm/day to m3/s
+                        area = row["area"].values[0]
+                        _streamflow = _streamflow * area * 1000 / 86400
+                    streamflow_data.append(_streamflow)
+                except IndexError:
+                    log.info(f"HUC10 {id} is missing from the attributes file.")
+                    no_pred = np.zeros([14610])
+                    streamflow_data.append(no_pred)
+                    continue
+    array = np.array(streamflow_data).T
+    column_keys = np.array(columns)
+    date_range = pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="D")
+    ds = xr.Dataset(
+        {"streamflow": (["time", "location"], array)},
+        coords={"time": date_range, "location": column_keys},
+    )
+    ds_interpolated = ds.interp(
+        time=pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="H"),
+        method="linear",
+    )
+    zgroup = ds_interpolated.to_zarr(Path(cfg.zarr.streamflow))
 
 
 def interpolate_chunk(data_chunk, date_index):

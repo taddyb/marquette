@@ -32,7 +32,7 @@ def main(cfg: DictConfig) -> None:
     edges = create_edges(cfg)
     log.info(f"Mapping MERIT {cfg.continent}{cfg.area} Streamflow to Nodes/Edges")
     create_TMs(cfg, edges)
-    log.info(f"Converting Streamflow to NetCDF data")
+    log.info(f"Converting Streamflow to zarr")
     write_streamflow(cfg)
     end = time.perf_counter()
     log.info(f"Extracting data took : {(end - start):.6f} seconds")
@@ -40,12 +40,15 @@ def main(cfg: DictConfig) -> None:
 
 def _missing_files(cfg: DictConfig) -> bool:
     import pandas as pd
+
     mapped_files_dir = Path(cfg.csv.mapped_streamflow_dir)
     try:
         file_count = sum(1 for item in mapped_files_dir.iterdir() if item.is_file())
         start_date = pd.Timestamp(cfg.start_date)
         end_date = pd.Timestamp(cfg.end_date)
-        num_years = (end_date.year - start_date.year) + 1  # need to include the first value
+        num_years = (
+            end_date.year - start_date.year
+        ) + 1  # need to include the first value
         return file_count != num_years
     except FileNotFoundError:
         return True  # No predictions. Return True

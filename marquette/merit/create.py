@@ -1,17 +1,12 @@
-import ast
 import logging
 from pathlib import Path
-from typing import Any
 
-import dask.array as da
 import dask.dataframe as dd
-from dask.diagnostics import ProgressBar
-import dask_geopandas as dg
 import geopandas as gpd
 import numpy as np
 from omegaconf import DictConfig
+from omegaconf.errors import ConfigAttributeError
 import pandas as pd
-from shapely.wkt import dumps
 from tqdm import tqdm
 import xarray as xr
 import zarr
@@ -33,8 +28,8 @@ from marquette.merit._TM_calculations import (
     join_geospatial_data,
 )
 from marquette.merit._streamflow_conversion_functions import (
-    extract_numbers,
-    _sort_into_bins,
+    calculate_from_qr_files,
+    calculate_from_individual_files
 )
 
 
@@ -85,132 +80,24 @@ def write_streamflow(cfg: DictConfig) -> None:
     })
     write_streamflow(cfg)
     """
-    streamflow_nc_path = Path(cfg.netcdf.streamflow)
-    if streamflow_nc_path.exists() is False:
-        attrs_df = pd.read_csv(cfg.save_paths.attributes)
-        huc10_ids = attrs_df["gage_ID"].values.astype("str")
-        huc_to_merit_TM = zarr.open(Path(cfg.zarr.HUC_TM), mode="r")
-        huc_10_list = huc_to_merit_TM.HUC10[:]
-        bins_size = 1000
-        bins = [
-            huc10_ids[i : i + bins_size] for i in range(0, len(huc10_ids), bins_size)
-        ]
-        basin_hucs = huc_10_list
-        basin_indexes = _sort_into_bins(basin_hucs, bins)
-        streamflow_data = []
-        columns = []
-        folder = Path(cfg.save_paths.streamflow_files)
-        file_paths = [file for file in folder.glob("*") if file.is_file()]
-        file_paths.sort(key=extract_numbers)
-        iterable = basin_indexes.keys()
-        pbar = tqdm(iterable)
-        for i, key in enumerate(pbar):
-            pbar.set_description(f"Processing Qr files")
-            values = basin_indexes[key]
-            if values:
-                file = file_paths[i]
-                df = pd.read_csv(file, dtype=np.float32, header=None)
-                for val in values:
-                    id = list(val.keys())[0]
-                    columns.append(id)
-                    row = attrs_df[attrs_df["gage_ID"] == id]
-                    try:
-                        attr_idx = row.index[0]
-                        try:
-                            row_idx = attr_idx - (
-                                key * 1000
-                            )  # taking only the back three numbers
-                            _streamflow = df.iloc[row_idx].values
-                        except IndexError as e:
-                            raise e
-                        if cfg.units.lower() == "mm/day":
-                            # converting from mm/day to m3/s
-                            area = row["area"].values[0]
-                            _streamflow = _streamflow * area * 1000 / 86400
-                        streamflow_data.append(_streamflow)
-                    except IndexError:
-                        log.info(f"HUC10 {id} is missing from the attributes file.")
-                        no_pred = np.zeros([14610])
-                        streamflow_data.append(no_pred)
-                        continue
-        array = np.array(streamflow_data).T
-        column_keys = np.array(columns)
-        date_range = pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="D")
-        ds = xr.Dataset(
-            {"streamflow": (["time", "location"], array)},
-            coords={"time": date_range, "location": column_keys},
-        )
-        ds_interpolated = ds.interp(
-            time=pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="H"),
-            method="linear",
-        )
-        ds_interpolated.to_netcdf(Path(cfg.netcdf.streamflow))
-    else:
-        log.info("Streamflow data already exists in netcdf format")
-
-
-def convert_streamflow(cfg: DictConfig) -> None:
-    """
-    Convert streamflow data from CSV files to a Zarr group format.
-
-    This function reads streamflow data from multiple CSV files located in a specified
-    directory, converts each file to a NumPy array, and then stores each array as a
-    dataset in a Zarr group. The function creates the Zarr group if it does not
-    already exist. Each dataset within the Zarr group is named after the corresponding
-    file.
-
-    Parameters:
-    cfg (DictConfig): A Hydra DictConfig configuration object. The configuration
-                      should contain the following keys:
-                      - zarr.streamflow: The path where the Zarr group will be created.
-                      - save_paths.streamflow_files: The directory containing the CSV
-                                                     files with streamflow data.
-
-    Returns:
-    None: This function does not return anything. It writes the converted data to
-          disk in Zarr group format.
-
-    Raises:
-    FileNotFoundError: If the specified directory for streamflow CSV files does not exist.
-    IOError: If there is an issue reading the CSV files or writing to the Zarr group.
-
-    Example usage:
-    ```
-    cfg = DictConfig({'zarr': {'streamflow': '/path/to/zarr/output'},
-                      'save_paths': {'streamflow_files': '/path/to/csv/files'}})
-    convert_streamflow(cfg)
-    ```
-    """
-    try:
-        streamflow_output = Path(cfg.zarr.streamflow)
-        if not streamflow_output.exists():
-            folder = Path(cfg.save_paths.streamflow_files)
-            if not folder.exists():
-                raise FileNotFoundError(f"Specified directory does not exist: {folder}")
-            file_paths = [file for file in folder.glob("*") if file.is_file()]
-            file_paths.sort(key=extract_numbers)
-            zarr_group = zarr.open_group(streamflow_output, mode="w")
-            for file in file_paths:
-                try:
-                    array = pd.read_csv(file, dtype=np.float32, header=None).to_numpy()
-                    zarr_group.create_dataset(file.name, data=array)
-                    log.info(f"Wrote {file.name} to disk")
-                except IOError as e:
-                    log.info(f"Error processing file {file}: {e}")
+    streamflow_path = Path(cfg.zarr.streamflow)
+    if streamflow_path.exists() is False:
+        if cfg.individual_streamflow_files:
+            """Expecting to read from individual files"""
+            calculate_from_individual_files(cfg)
         else:
-            log.info(f"Zarr group already exists: {streamflow_output}")
-
-    except FileNotFoundError as e:
-        log.error(f"File not found: {e}")
-    except IOError as e:
-        log.error(f"I/O error occurred: {e}")
+            """Expecting to read data from QR files"""
+            calculate_from_qr_files(cfg)
+    else:
+        log.info("Streamflow data already exists")
 
 
 def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
-    edges_file = Path(cfg.zarr.edges)
-    if edges_file.exists():
+    root = zarr.open_group(Path(cfg.zarr.edges), mode="a")
+    group_name = f"{cfg.continent}{cfg.area}"
+    if group_name in root:
         log.info("Edge data already exists in zarr format")
-        edges = zarr.open(edges_file, mode="r")
+        edges = root.require_group(group_name)
     else:
         flowline_file: Path = find_flowlines(cfg)
         polyline_gdf: gpd.GeoDataFrame = gpd.read_file(flowline_file)
@@ -227,15 +114,7 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
             "order",
         ]:
             polyline_gdf[col] = polyline_gdf[col].astype(int)
-        crs: Any = polyline_gdf.crs
         computed_series = polyline_gdf.apply(lambda df: create_segment(df, polyline_gdf.crs, dx, buffer), axis=1)
-        # dask_gdf = dg.from_geopandas(polyline_gdf, npartitions=cfg.num_partitions)
-        # meta = pd.Series({}, dtype=object)
-        # with ProgressBar():
-        #     computed_series: dd.Series = dask_gdf.map_partitions(
-        #         lambda df: df.apply(create_segment, args=(polyline_gdf.crs, dx, buffer), axis=1),
-        #         meta=meta
-        #     ).compute()
         segments_dict = computed_series.to_dict()
         segment_das = {
             segment["id"]: segment["uparea"] for segment in segments_dict.values()
@@ -313,9 +192,6 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
             segment_das=segment_das,
             meta=meta,
         )
-        # for i, segment in segments_dict.items():
-        #     segment_id = segment["id"]
-        #     segment["index"] = i
         edges_results_one_df = edges_results_one.compute()
         edges_results_many_df = edges_results_many.compute()
         merged_df = pd.concat([edges_results_one_df, edges_results_many_df])
@@ -324,15 +200,19 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
         xr_dataset = xr.Dataset.from_dataframe(merged_df)
         sorted_keys_array = np.array(sorted_keys)
         sorted_edges = xr.Dataset()
+        edges = root.create_group(group_name)
         for var_name in xr_dataset.data_vars:
             sorted_edges[var_name] = sort_xarray_dataarray(
                 xr_dataset[var_name],
                 sorted_keys_array,
                 xr_dataset["segment_sorting_index"].values,
             )
-        sorted_edges.to_zarr(Path(cfg.zarr.edges), mode="w")
-        edges = zarr.open_group(Path(cfg.zarr.edges), mode="r")
-        zarr.save(cfg.zarr.sorted_edges_keys, sorted_keys_array)
+            shape = sorted_edges[var_name].shape
+            dtype = sorted_edges[var_name].dtype
+            tmp = edges.zeros(var_name, shape=shape, chunks=1000, dtype=dtype)
+            tmp[:] = sorted_edges[var_name].values
+        tmp = edges.zeros("sorted_keys", shape=sorted_keys_array.shape, chunks=1000, dtype=sorted_keys_array.dtype)
+        tmp[:] = sorted_keys_array
     return edges
 
 
