@@ -121,8 +121,8 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
         }
         sorted_keys = sorted(segments_dict, key=lambda key: segments_dict[key]['uparea'])
         num_edges_dict = {
-            segment_["id"]: calculate_num_edges(segment_["len"], dx, buffer)
-            for seg_id, segment_ in tqdm(
+            _segment["id"]: calculate_num_edges(_segment["len"], dx, buffer)
+            for _, _segment in tqdm(
                 segments_dict.items(), desc="Processing Number of Edges"
             )
         }
@@ -183,12 +183,14 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
         edges_results_one = ddf_one.map_partitions(
             singular_segment_to_edge_partition,
             edge_info=one_edge_segment,
+            num_edge_dict=num_edges_dict,
             segment_das=segment_das,
             meta=meta,
         )
         edges_results_many = ddf_many.map_partitions(
             many_segment_to_edge_partition,
             edge_info=many_edge_segment,
+            num_edge_dict=num_edges_dict,
             segment_das=segment_das,
             meta=meta,
         )

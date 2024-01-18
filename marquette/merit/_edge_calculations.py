@@ -242,7 +242,7 @@ def create_segment_dict(row: pd.Series, segment_coords: List[Tuple[float, float]
     return segment_dict
 
 
-def get_upstream_ids(row: pd.Series, edge_counts: int):
+def get_upstream_ids(row: pd.Series, edge_info: dict):
     """
     Generate upstream IDs for a segment.
 
@@ -250,7 +250,7 @@ def get_upstream_ids(row: pd.Series, edge_counts: int):
     ----------
     row : pandas.Series
         A series representing a row from the segment DataFrame.
-    edge_counts : int
+    edge_info : dict
         The number of edges associated with the segment.
 
     Returns
@@ -258,12 +258,15 @@ def get_upstream_ids(row: pd.Series, edge_counts: int):
     list
         List of upstream segment IDs.
     """
+    up_ids = []
     if row["up"] is None:
-        return []
+        return up_ids
     try:
         if isinstance(row["up"], str):
             row["up"] = ast.literal_eval(row["up"])
-        up_ids = [f"{up}_{edge_counts - 1}" for up in row["up"]]
+        for id in row["up"]:
+            num_edges, _ = edge_info[id]
+            up_ids.append(f"{id}_{num_edges - 1}")
     except KeyError:
         log.error(f"KeyError with segment {row['id']}")
         return []
@@ -300,7 +303,7 @@ def find_flowlines(cfg: DictConfig) -> Path:
 
 
 def many_segment_to_edge_partition(
-    df: pd.DataFrame, edge_info: Dict[str, Any], segment_das: Dict[str, float]
+    df: pd.DataFrame, edge_info: Dict[str, Any], num_edge_dict: Dict[str, Any], segment_das: Dict[str, float]
 ) -> pd.DataFrame:
     """
     Process a DataFrame partition to create edges for segments with multiple edges.
@@ -328,7 +331,7 @@ def many_segment_to_edge_partition(
     for _, segment in tqdm(df.iterrows(), total=len(df), desc="Processing Segments"):
         all_segment_edges = []
         num_edges, edge_len = edge_info[segment["id"]]
-        up_ids = get_upstream_ids(segment, num_edges)
+        up_ids = get_upstream_ids(segment, num_edge_dict)
         for i in range(num_edges):
             if i == 0:
                 edge = create_edge_json(
@@ -358,7 +361,7 @@ def many_segment_to_edge_partition(
 
 
 def singular_segment_to_edge_partition(
-    df: pd.DataFrame, edge_info: Dict[str, Any], segment_das: Dict[str, float]
+    df: pd.DataFrame, edge_info: Dict[str, Any], num_edge_dict: Dict[str, Any], segment_das: Dict[str, float]
 ) -> pd.DataFrame:
     """
     Process a DataFrame partition to create edges for each segment.
@@ -384,8 +387,8 @@ def singular_segment_to_edge_partition(
     all_edges = []
     num_edges = 1
     for _, segment in tqdm(df.iterrows(), total=len(df)):
-        edge_len = edge_info[segment["id"]][1]
-        up_ids = get_upstream_ids(segment, num_edges)
+        __, edge_len = edge_info[segment["id"]]
+        up_ids = get_upstream_ids(segment, num_edge_dict)
         edge = create_edge_json(
             segment, up=up_ids, ds=f"{segment['ds']}_0", edge_id=f"{segment['id']}_0",
         )
