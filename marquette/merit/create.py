@@ -5,9 +5,9 @@ import dask.dataframe as dd
 import geopandas as gpd
 import numpy as np
 from omegaconf import DictConfig
-from omegaconf.errors import ConfigAttributeError
 import pandas as pd
 from tqdm import tqdm
+import torch
 import xarray as xr
 import zarr
 
@@ -22,6 +22,9 @@ from marquette.merit._edge_calculations import (
     string_to_dict_builder,
     sort_xarray_dataarray,
 )
+
+from marquette.merit._connectivity_matrix import downstream_map
+
 from marquette.merit._TM_calculations import (
     create_HUC_MERIT_TM,
     create_MERIT_FLOW_TM,
@@ -29,7 +32,7 @@ from marquette.merit._TM_calculations import (
 )
 from marquette.merit._streamflow_conversion_functions import (
     calculate_from_qr_files,
-    calculate_from_individual_files
+    calculate_from_individual_files,
 )
 
 
@@ -114,12 +117,16 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
             "order",
         ]:
             polyline_gdf[col] = polyline_gdf[col].astype(int)
-        computed_series = polyline_gdf.apply(lambda df: create_segment(df, polyline_gdf.crs, dx, buffer), axis=1)
+        computed_series = polyline_gdf.apply(
+            lambda df: create_segment(df, polyline_gdf.crs, dx, buffer), axis=1
+        )
         segments_dict = computed_series.to_dict()
         segment_das = {
             segment["id"]: segment["uparea"] for segment in segments_dict.values()
         }
-        sorted_keys = sorted(segments_dict, key=lambda key: segments_dict[key]['uparea'])
+        sorted_keys = sorted(
+            segments_dict, key=lambda key: segments_dict[key]["uparea"]
+        )
         num_edges_dict = {
             _segment["id"]: calculate_num_edges(_segment["len"], dx, buffer)
             for _, _segment in tqdm(
@@ -213,9 +220,42 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
             dtype = sorted_edges[var_name].dtype
             tmp = edges.zeros(var_name, shape=shape, chunks=1000, dtype=dtype)
             tmp[:] = sorted_edges[var_name].values
-        tmp = edges.zeros("sorted_keys", shape=sorted_keys_array.shape, chunks=1000, dtype=sorted_keys_array.dtype)
+        tmp = edges.zeros(
+            "sorted_keys",
+            shape=sorted_keys_array.shape,
+            chunks=1000,
+            dtype=sorted_keys_array.dtype,
+        )
         tmp[:] = sorted_keys_array
     return edges
+
+
+def create_N(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
+    root = zarr.open_group(Path(cfg.zarr.csr_matrix), mode="a")
+    group_name = f"{cfg.continent}{cfg.area}"
+    if group_name in root:
+        log.info("Connectivity Matrix (N) already exists")
+    else:
+        id_to_index = {id_val: idx for idx, id_val in enumerate(edges.id[:])}
+        rows, cols, data, visited = [], [], [], set()
+
+        for id_index in tqdm(range(len(edges.id)), desc="Mapping Downstream"):
+            downstream_map(id_index, edges, rows, cols, data, id_to_index, visited)
+
+        rows_tensor = torch.tensor(rows, dtype=torch.int64)
+        cols_tensor = torch.tensor(cols, dtype=torch.int64)
+        data_tensor = torch.tensor(data, dtype=torch.float32)
+
+        csr_data = root.create_group(cfg.save_name)
+        csr_data.create_dataset(
+            "rows", data=rows_tensor.numpy(), chunks=(10000,), dtype="i8"
+        )
+        csr_data.create_dataset(
+            "cols", data=cols_tensor.numpy(), chunks=(10000,), dtype="i8"
+        )
+        csr_data.create_dataset(
+            "data", data=data_tensor.numpy(), chunks=(10000,), dtype="f4"
+        )
 
 
 def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:

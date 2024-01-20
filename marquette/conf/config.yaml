@@ -16,12 +16,13 @@ save_name: ${continent}${area}
 individual_streamflow_files: True
 save_paths:
   attributes: ${data_path}/streamflow/attributes_dpl_v3.csv
-  flow_lines: ${data_path}/${name}/raw/flowlines
   basins: ${data_path}/${name}/raw/basins/cat_pfaf_${continent}${area}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
+  flow_lines: ${data_path}/${name}/raw/flowlines
   huc10: ${data_path}/HUC/huc_10_CONUS.shp
   streamflow_files: ${data_path}/streamflow/predictions/dpl_v3/
 zarr:
-  edges: ${data_path}/${name}/zarr/graph/${name}_edges/
+  csr_matrix: ${data_path}/${name}/zarr/graph/csr_network_matrix/
+  edges: ${data_path}/${name}/zarr/graph/edges/
   HUC_TM: ${data_path}/${name}/zarr/TMs/PFAF_${continent}${area}
   MERIT_TM: ${data_path}/${name}/zarr/TMs/MERIT_FLOWLINES_${continent}${area}
   streamflow: ${data_path}/streamflow/zarr/dpl_v3/${save_name}
