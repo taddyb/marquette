@@ -45,9 +45,6 @@ def create_HUC_MERIT_TM(cfg: DictConfig, gdf: gpd.GeoDataFrame) -> zarr.hierarch
     zarr_path = Path(cfg.zarr.HUC_TM)
     xr_dataset.to_zarr(zarr_path, mode='w')
     zarr_hierarchy = zarr.open_group(Path(cfg.zarr.HUC_TM), mode='r')
-    # df = xr_dataset.to_dataframe().unstack('COMID')['TM']
-    # df.to_csv(Path(cfg.csv.TM), compression="gzip")
-    # log.info("Finished Data Extraction")
     return zarr_hierarchy
 
 
@@ -79,10 +76,23 @@ def create_MERIT_FLOW_TM(
             column_index = np.where(river_graph_ids == river_graph_ids[idx])[0][0]
             proportion_array[i, column_index] = proportion
 
-    zarr_group = zarr.open_group(Path(cfg.zarr.MERIT_TM), mode='w')
-    zarr_group.create_dataset('TM', data=proportion_array)
-    zarr_group.create_dataset('COMIDs', data=COMIDs)
-    zarr_group.create_dataset('EDGEIDs', data=river_graph_ids)
+    data_array = xr.DataArray(
+        data=proportion_array,
+        dims=["COMID", "EDGEID"],  # Explicitly naming the dimensions
+        coords={"COMID": COMIDs, "EDGEID": river_graph_ids}  # Adding coordinates
+    )
+    xr_dataset = xr.Dataset(
+        data_vars={"TM": data_array},
+        attrs={"description": "MERIT -> Edge Transition Matrix"}
+    )
+    zarr_path = Path(cfg.zarr.MERIT_TM)
+    xr_dataset.to_zarr(zarr_path, mode='w')
+    zarr_hierarchy = zarr.open_group(Path(cfg.zarr.MERIT_TM), mode='r')
+    return zarr_hierarchy
+    # zarr_group = zarr.open_group(Path(cfg.zarr.MERIT_TM), mode='w')
+    # zarr_group.create_dataset('TM', data=proportion_array)
+    # zarr_group.create_dataset('COMIDs', data=COMIDs)
+    # zarr_group.create_dataset('EDGEIDs', data=river_graph_ids)
 
 
 def join_geospatial_data(cfg: DictConfig) -> gpd.GeoDataFrame:
