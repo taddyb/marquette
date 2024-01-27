@@ -115,7 +115,7 @@ def _sort_into_bins(ids: np.ndarray, bins: List[np.ndarray]):
     return grouped_values
 
 
-def calculate_from_individual_files(cfg: DictConfig):
+def calculate_from_individual_files(cfg: DictConfig) -> None:
     def process_file(file_path, id_to_area, default_area):
         data = np.load(file_path)
         file_id = file_path.stem
@@ -139,16 +139,16 @@ def calculate_from_individual_files(cfg: DictConfig):
     column_keys = np.array(columns)
     date_range = pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="D")
     ds = xr.Dataset(
-        {"streamflow": (["time", "location"], array)},
-        coords={"time": date_range, "location": column_keys},
+        {"streamflow": (["time", "HUC10"], array)},
+        coords={"time": date_range, "HUC10": column_keys},
     )
     ds_interpolated = ds.interp(
         time=pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="H"),
         method="linear",
     )
-    zgroup = ds_interpolated.to_zarr(Path(cfg.zarr.streamflow))
 
-def calculate_from_qr_files(cfg: DictConfig):
+
+def calculate_from_qr_files(cfg: DictConfig) -> None:
     attrs_df = pd.read_csv(cfg.save_paths.attributes)
     huc10_ids = attrs_df["gage_ID"].values.astype("str")
     huc_to_merit_TM = zarr.open(Path(cfg.zarr.HUC_TM), mode="r")
@@ -192,21 +192,21 @@ def calculate_from_qr_files(cfg: DictConfig):
                     streamflow_data.append(_streamflow)
                 except IndexError:
                     log.info(f"HUC10 {id} is missing from the attributes file.")
-                    no_pred = np.zeros([14610])
+                    no_pred = np.zeros([14610])  # the len of the array
                     streamflow_data.append(no_pred)
                     continue
     array = np.array(streamflow_data).T
     column_keys = np.array(columns)
     date_range = pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="D")
     ds = xr.Dataset(
-        {"streamflow": (["time", "location"], array)},
-        coords={"time": date_range, "location": column_keys},
+        {"streamflow": (["time", "HUC10"], array)},
+        coords={"time": date_range, "HUC10": column_keys},
     )
     ds_interpolated = ds.interp(
         time=pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="H"),
         method="linear",
     )
-    zgroup = ds_interpolated.to_zarr(Path(cfg.zarr.streamflow))
+    ds_interpolated.to_zarr(Path(cfg.zarr.streamflow))
 
 
 def interpolate_chunk(data_chunk, date_index):

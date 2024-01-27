@@ -26,11 +26,16 @@ def main(cfg: DictConfig) -> None:
     if cfg.name.lower() == "hydrofabric":
         raise ImportError("Hydrofabric functionality not yet supported")
     elif cfg.name.lower() == "merit":
-        from marquette.merit.create import create_edges, create_N, create_TMs, write_streamflow
+        from marquette.merit.create import (
+            create_edges,
+            create_N,
+            create_TMs,
+            write_streamflow,
+        )
     start = time.perf_counter()
     log.info(f"Creating MERIT {cfg.continent}{cfg.area} River Graph")
     edges = create_edges(cfg)
-    log.info(f"Creating MERIT {cfg.continent}{cfg.area} Connectivity Matrix (N)")
+    log.info(f"Creating MERIT {cfg.continent}{cfg.area} Connectivity Matrix (N) for gages")
     create_N(cfg, edges)
     log.info(f"Mapping MERIT {cfg.continent}{cfg.area} Streamflow to Nodes/Edges")
     create_TMs(cfg, edges)

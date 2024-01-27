@@ -1,3 +1,4 @@
+from collections import defaultdict
 import logging
 from pathlib import Path
 
@@ -23,7 +24,7 @@ from marquette.merit._edge_calculations import (
     sort_xarray_dataarray,
 )
 
-from marquette.merit._connectivity_matrix import downstream_map
+from marquette.merit._connectivity_matrix import create_gage_connectivity, map_gages_to_zone
 
 from marquette.merit._TM_calculations import (
     create_HUC_MERIT_TM,
@@ -85,7 +86,7 @@ def write_streamflow(cfg: DictConfig) -> None:
     """
     streamflow_path = Path(cfg.zarr.streamflow)
     if streamflow_path.exists() is False:
-        if cfg.individual_streamflow_files:
+        if cfg.streamflow_version.lower() == "dpl_v3":
             """Expecting to read from individual files"""
             calculate_from_individual_files(cfg)
         else:
@@ -102,10 +103,10 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
         log.info("Edge data already exists in zarr format")
         edges = root.require_group(group_name)
     else:
-        flowline_file: Path = find_flowlines(cfg)
-        polyline_gdf: gpd.GeoDataFrame = gpd.read_file(flowline_file)
-        dx: int = cfg.dx  # Unit: Meters
-        buffer: float = cfg.buffer * dx  # Unit: Meters
+        flowline_file = find_flowlines(cfg)
+        polyline_gdf = gpd.read_file(flowline_file)
+        dx = cfg.dx  # Unit: Meters
+        buffer = cfg.buffer * dx  # Unit: Meters
         for col in [
             "COMID",
             "NextDownID",
@@ -231,34 +232,20 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
 
 
 def create_N(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
-    root = zarr.open_group(Path(cfg.zarr.csr_matrix), mode="a")
-    group_name = f"{cfg.continent}{cfg.area}"
-    if group_name in root:
-        log.info("Connectivity Matrix (N) already exists")
+    zone_csv_path = Path(cfg.csv.zone_gage_information)
+    if zone_csv_path.exists():
+        zone_csv = pd.read_csv(zone_csv_path)
     else:
-        id_to_index = {id_val: idx for idx, id_val in enumerate(edges.id[:])}
-        rows, cols, data, visited = [], [], [], set()
-
-        for id_index in tqdm(range(len(edges.id)), desc="Mapping Downstream"):
-            downstream_map(id_index, edges, rows, cols, data, id_to_index, visited)
-
-        rows_tensor = torch.tensor(rows, dtype=torch.int64)
-        cols_tensor = torch.tensor(cols, dtype=torch.int64)
-        data_tensor = torch.tensor(data, dtype=torch.float32)
-
-        csr_data = root.create_group(cfg.save_name)
-        csr_data.create_dataset(
-            "rows", data=rows_tensor.numpy(), chunks=(10000,), dtype="i8"
-        )
-        csr_data.create_dataset(
-            "cols", data=cols_tensor.numpy(), chunks=(10000,), dtype="i8"
-        )
-        csr_data.create_dataset(
-            "data", data=data_tensor.numpy(), chunks=(10000,), dtype="f4"
-        )
+        zone_csv = map_gages_to_zone(cfg, edges)
+    gage_coo_root = zarr.open_group(
+        Path(cfg.zarr.gage_coo_indices), mode="a"
+    )
+    zone_root = gage_coo_root.require_group(cfg.zone)
+    create_gage_connectivity(edges, zone_root, zone_csv)
+    log.info("All sparse matrices are created")
 
 
-def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
+def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> (zarr.hierarchy.Group, zarr.hierarchy.Group):
     huc_to_merit_path = Path(cfg.zarr.HUC_TM)
     if huc_to_merit_path.exists():
         log.info("HUC -> MERIT data already exists in zarr format")
@@ -274,4 +261,13 @@ def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
     else:
         log.info(f"Creating MERIT -> FLOWLINE TM")
         merit_to_river_graph_TM = create_MERIT_FLOW_TM(cfg, edges, huc_to_merit_TM)
-    return huc_to_merit_TM
+    return merit_to_river_graph_TM, huc_to_merit_TM
+
+
+def calculate_lateral_inflow(cfg: DictConfig) -> None:
+    xr_streamflow_to_huc_TM = xr.open_zarr(Path(cfg.zarr.streamflow))
+    xr_huc_to_merit_TM = xr.open_zarr(Path(cfg.zarr.HUC_TM))
+    xr_merit_to_edge_TM = xr.open_zarr(Path(cfg.zarr.MERIT_TM))
+    streamflow_merit = xr.dot(xr_streamflow_to_huc_TM['streamflow'], xr_huc_to_merit_TM['TM'])
+    streamflow_edges = xr.dot(streamflow_merit, xr_merit_to_edge_TM['TM'])
+
