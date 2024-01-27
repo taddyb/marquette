@@ -152,15 +152,21 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         unique_gdf["drainage_area_percent_error"] <= cfg.drainage_area_treshold
     ]
 
+    try:
+        result_df["LAT_GAGE"] = result_df["Latitude"]
+        result_df["LNG_GAGE"] = result_df["Longitude"]
+    except KeyError:
+        pass
+
     columns = [
         "STAID",
         "STANAME",
-        "MERIT_ZONE",
-        "HUC02",
+        # "MERIT_ZONE",
+        # "HUC02",
         "DRAIN_SQKM",
         "LAT_GAGE",
         "LNG_GAGE",
-        "STATE",
+        # "STATE",
         "COMID",
         "edge_intersection",
         "zone_edge_id",
@@ -311,7 +317,7 @@ def create_gage_connectivity(
     def apply_find_connections(row, gage_coo_root, edges):
         return find_connections(row, gage_coo_root, edges)
 
-    dask_df = dd.from_pandas(zone_csv, npartitions=10)
+    dask_df = dd.from_pandas(zone_csv, npartitions=1)
     result = dask_df.apply(
         apply_find_connections,
         args=(gage_coo_root, edges),
