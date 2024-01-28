@@ -241,7 +241,7 @@ def create_N(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
         Path(cfg.zarr.gage_coo_indices), mode="a"
     )
     zone_root = gage_coo_root.require_group(cfg.zone)
-    create_gage_connectivity(edges, zone_root, zone_csv)
+    create_gage_connectivity(cfg, edges, zone_root, zone_csv)
     log.info("All sparse matrices are created")
 
 
@@ -253,7 +253,7 @@ def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> (zarr.hierarchy.
     else:
         log.info(f"Creating HUC10 -> MERIT TM")
         overlayed_merit_basins = join_geospatial_data(cfg)
-        huc_to_merit_TM = create_HUC_MERIT_TM(cfg, overlayed_merit_basins)
+        huc_to_merit_TM = create_HUC_MERIT_TM(cfg, edges, overlayed_merit_basins)
     merit_to_river_graph_path = Path(cfg.zarr.MERIT_TM)
     if merit_to_river_graph_path.exists():
         log.info("MERIT -> FLOWLINE data already exists in zarr format")

@@ -13,7 +13,7 @@ import zarr
 log = logging.getLogger(__name__)
 
 
-def create_HUC_MERIT_TM(cfg: DictConfig, gdf: gpd.GeoDataFrame) -> zarr.hierarchy.Group:
+def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.GeoDataFrame) -> zarr.hierarchy.Group:
     """
     Create a Transfer Matrix (TM) from GeoDataFrame.
 
@@ -23,9 +23,8 @@ def create_HUC_MERIT_TM(cfg: DictConfig, gdf: gpd.GeoDataFrame) -> zarr.hierarch
     """
     gdf = gdf.dropna(subset=['HUC10'])
     huc10_ids = gdf["HUC10"].unique()
-    merit_ids = gdf["COMID"].unique()
     huc10_ids.sort()
-    merit_ids.sort()
+    merit_ids = np.unique(edges.merit_basin[:])  # already sorted
     data_array = xr.DataArray(np.zeros((len(huc10_ids), len(merit_ids))),
                               dims=["HUC10", "COMID"],
                               coords={"HUC10": huc10_ids, "COMID": merit_ids})
@@ -59,11 +58,15 @@ def create_MERIT_FLOW_TM(
     :param huc_to_merit_TM:
     :return:
     """
-    COMIDs = huc_to_merit_TM.COMID[:]
+    COMIDs = np.unique(edges.merit_basin[:])  # already sorted
     river_graph_ids = edges.id[:]
     merit_basin = edges.merit_basin[:]
     river_graph_len = edges.len[:]
-    proportion_array = np.zeros((len(COMIDs), len(river_graph_ids)))
+    data_array = xr.DataArray(
+        data=np.zeros((len(COMIDs), len(river_graph_ids))),
+        dims=["COMID", "EDGEID"],  # Explicitly naming the dimensions
+        coords={"COMID": COMIDs, "EDGEID": river_graph_ids}  # Adding coordinates
+    )
     for i, basin_id in enumerate(tqdm(COMIDs, desc="Processing River flowlines")):
         indices = np.where(merit_basin == basin_id)[0]
 
@@ -74,13 +77,7 @@ def create_MERIT_FLOW_TM(
         proportions = river_graph_len[indices] / total_length
         for idx, proportion in zip(indices, proportions):
             column_index = np.where(river_graph_ids == river_graph_ids[idx])[0][0]
-            proportion_array[i, column_index] = proportion
-
-    data_array = xr.DataArray(
-        data=proportion_array,
-        dims=["COMID", "EDGEID"],  # Explicitly naming the dimensions
-        coords={"COMID": COMIDs, "EDGEID": river_graph_ids}  # Adding coordinates
-    )
+            data_array.loc[i, column_index] = proportion
     xr_dataset = xr.Dataset(
         data_vars={"TM": data_array},
         attrs={"description": "MERIT -> Edge Transition Matrix"}
@@ -89,10 +86,6 @@ def create_MERIT_FLOW_TM(
     xr_dataset.to_zarr(zarr_path, mode='w')
     zarr_hierarchy = zarr.open_group(Path(cfg.zarr.MERIT_TM), mode='r')
     return zarr_hierarchy
-    # zarr_group = zarr.open_group(Path(cfg.zarr.MERIT_TM), mode='w')
-    # zarr_group.create_dataset('TM', data=proportion_array)
-    # zarr_group.create_dataset('COMIDs', data=COMIDs)
-    # zarr_group.create_dataset('EDGEIDs', data=river_graph_ids)
 
 
 def join_geospatial_data(cfg: DictConfig) -> gpd.GeoDataFrame:

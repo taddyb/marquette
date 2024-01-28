@@ -153,8 +153,8 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
     ]
 
     try:
+        result_df["LNG_GAGE"] = result_df["LON_GAGE"]
         result_df["LAT_GAGE"] = result_df["Latitude"]
-        result_df["LNG_GAGE"] = result_df["Longitude"]
     except KeyError:
         pass
 
@@ -197,6 +197,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
 
 
 def create_gage_connectivity(
+    cfg: DictConfig,
     edges: zarr.hierarchy.Group,
     gage_coo_root: zarr.hierarchy.Group,
     zone_csv: gpd.GeoDataFrame,
@@ -261,7 +262,7 @@ def create_gage_connectivity(
         return river_graph
 
     def create_coo_data(
-        gage_output, padded_gage_id: str, root: zarr.Group
+        gage_output, _gage_id: str, root: zarr.Group
     ) -> List[Tuple[Any, Any]]:
         """
         Creates coordinate format (COO) data from river graph output for a specific gage.
@@ -297,30 +298,34 @@ def create_gage_connectivity(
                     pairs.append((ds, up))
 
         # Create a Zarr dataset for this specific gage
-        single_gage_csr_data = root.require_group(padded_gage_id)
+        single_gage_csr_data = root.require_group(_gage_id)
         single_gage_csr_data.create_dataset(
             "pairs", data=np.array(pairs), chunks=(10000,), dtype="float32"
         )
 
         return pairs
 
-    def find_connections(row, coo_root, zone_attributes):
-        gage_id = str(row["STAID"]).zfill(8)
+    def find_connections(row, coo_root, zone_attributes, _pad_gage_id=True):
+        if _pad_gage_id:
+            _gage_id = str(row["STAID"]).zfill(8)
+        else:
+            _gage_id = str(row["STAID"])
         edge_id = row["edge_intersection"]
         zone_edge_id = row["zone_edge_id"]
-        if gage_id not in coo_root:
+        if _gage_id not in coo_root:
             gage_output = stack_traversal(
-                gage_id, edge_id, zone_edge_id, zone_attributes
+                _gage_id, edge_id, zone_edge_id, zone_attributes
             )
-            create_coo_data(gage_output, gage_id, coo_root)
+            create_coo_data(gage_output, _gage_id, coo_root)
 
-    def apply_find_connections(row, gage_coo_root, edges):
-        return find_connections(row, gage_coo_root, edges)
+    def apply_find_connections(row, gage_coo_root, edges, pad_gage_id):
+        return find_connections(row, gage_coo_root, edges, pad_gage_id)
 
-    dask_df = dd.from_pandas(zone_csv, npartitions=1)
+    pad_gage_id = cfg.pad_gage_id
+    dask_df = dd.from_pandas(zone_csv, npartitions=16)
     result = dask_df.apply(
         apply_find_connections,
-        args=(gage_coo_root, edges),
+        args=(gage_coo_root, edges, pad_gage_id),
         axis=1,
         meta=(None, "object"),
     )
