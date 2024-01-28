@@ -245,23 +245,20 @@ def create_N(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
     log.info("All sparse matrices are created")
 
 
-def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> (zarr.hierarchy.Group, zarr.hierarchy.Group):
+def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
     huc_to_merit_path = Path(cfg.zarr.HUC_TM)
     if huc_to_merit_path.exists():
         log.info("HUC -> MERIT data already exists in zarr format")
-        huc_to_merit_TM = zarr.open(huc_to_merit_path, mode="r")
     else:
         log.info(f"Creating HUC10 -> MERIT TM")
         overlayed_merit_basins = join_geospatial_data(cfg)
-        huc_to_merit_TM = create_HUC_MERIT_TM(cfg, edges, overlayed_merit_basins)
+        create_HUC_MERIT_TM(cfg, edges, overlayed_merit_basins)
     merit_to_river_graph_path = Path(cfg.zarr.MERIT_TM)
     if merit_to_river_graph_path.exists():
         log.info("MERIT -> FLOWLINE data already exists in zarr format")
-        merit_to_river_graph_TM = zarr.open(merit_to_river_graph_path, mode="r")
     else:
         log.info(f"Creating MERIT -> FLOWLINE TM")
-        merit_to_river_graph_TM = create_MERIT_FLOW_TM(cfg, edges, huc_to_merit_TM)
-    return merit_to_river_graph_TM, huc_to_merit_TM
+        create_MERIT_FLOW_TM(cfg, edges)
 
 
 def calculate_lateral_inflow(cfg: DictConfig) -> None:

@@ -13,7 +13,7 @@ import zarr
 log = logging.getLogger(__name__)
 
 
-def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.GeoDataFrame) -> zarr.hierarchy.Group:
+def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.GeoDataFrame) -> None:
     """
     Create a Transfer Matrix (TM) from GeoDataFrame.
 
@@ -44,11 +44,10 @@ def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.G
     zarr_path = Path(cfg.zarr.HUC_TM)
     xr_dataset.to_zarr(zarr_path, mode='w')
     zarr_hierarchy = zarr.open_group(Path(cfg.zarr.HUC_TM), mode='r')
-    return zarr_hierarchy
 
 
 def create_MERIT_FLOW_TM(
-    cfg: DictConfig, edges: zarr.hierarchy.Group, huc_to_merit_TM: zarr.hierarchy.Group
+    cfg: DictConfig, edges: zarr.hierarchy.Group
 ) -> zarr.hierarchy.Group:
     """
     Creating a TM that maps MERIT basins to their reaches. Flow predictions are distributed
@@ -85,7 +84,6 @@ def create_MERIT_FLOW_TM(
     zarr_path = Path(cfg.zarr.MERIT_TM)
     xr_dataset.to_zarr(zarr_path, mode='w')
     zarr_hierarchy = zarr.open_group(Path(cfg.zarr.MERIT_TM), mode='r')
-    return zarr_hierarchy
 
 
 def join_geospatial_data(cfg: DictConfig) -> gpd.GeoDataFrame:
