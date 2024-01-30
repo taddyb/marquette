@@ -6,7 +6,7 @@ from typing import List, Tuple
 from omegaconf import DictConfig
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+from tqdm import tqdm, trange
 import xarray as xr
 import zarr
 
@@ -115,37 +115,41 @@ def _sort_into_bins(ids: np.ndarray, bins: List[np.ndarray]):
     return grouped_values
 
 
-def calculate_from_individual_files(cfg: DictConfig) -> None:
-    def process_file(file_path, id_to_area, default_area):
-        data = np.load(file_path)
-        file_id = file_path.stem
-        area = id_to_area.get(file_id, default_area)
-        data = data * area * 1000 / 86400
-        return file_id, data
+def calculate_from_individual_files(cfg: DictConfig,  streamflow_files_path: Path) -> None:
     attrs_df = pd.read_csv(cfg.save_paths.attributes)
     attrs_df['gage_ID'] = attrs_df['gage_ID'].astype(str).str.zfill(10)  # Left padding a 0 to make sure that all gages can be read
     id_to_area = attrs_df.set_index('gage_ID')['area'].to_dict()
-    mean_area = attrs_df['area'].mean()
-    streamflow_path = Path(cfg.zarr.streamflow)
+
     huc_to_merit_TM = zarr.open(Path(cfg.zarr.HUC_TM), mode="r")
     huc_10_list = huc_to_merit_TM.HUC10[:]
-    streamflow_files_path = Path(cfg.save_paths.streamflow_files)
-    huc_10_set = set(huc_10_list)
-    matching_files = [f for f in streamflow_files_path.glob('*.npy') if f.stem in huc_10_set]
-    processed_data = [process_file(file_path, id_to_area, mean_area) for file_path in matching_files]
-    columns = [item[0] for item in processed_data]
-    streamflow_predictions = [item[1].squeeze() for item in processed_data]
-    array = np.array(streamflow_predictions).T
-    column_keys = np.array(columns)
     date_range = pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="D")
-    ds = xr.Dataset(
-        {"streamflow": (["time", "HUC10"], array)},
-        coords={"time": date_range, "HUC10": column_keys},
+    streamflow_data = np.zeros((len(date_range), len(huc_10_list)))
+
+    for i, huc_id in enumerate(tqdm(huc_10_list, desc="Processing River flowlines")):
+        try:
+            file_path = streamflow_files_path / f"{huc_id}.npy"
+            data = np.load(file_path)
+            file_id = file_path.stem
+            area = id_to_area.get(file_id)  # defaulting to mean area if there is no area for the HUC10
+            data = data * area * 1000 / 86400
+            streamflow_data[:, i] = data
+        except FileNotFoundError:
+            log.info(f"No Predictions found for {huc_id}")
+        except KeyError:
+            log.info(f"{huc_id} has no area")
+
+    data_array = xr.DataArray(
+        data=streamflow_data,
+        dims=["time", "HUC10"],  # Explicitly naming the dimensions
+        coords={"time": date_range, "HUC10": huc_10_list}  # Adding coordinates
     )
-    ds_interpolated = ds.interp(
-        time=pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="H"),
-        method="linear",
+    xr_dataset = xr.Dataset(
+        data_vars={"streamflow": data_array},
+        attrs={"description": "Streamflow -> HUC Predictions"}
     )
+    streamflow_path = Path(cfg.zarr.streamflow)
+    xr_dataset.to_zarr(streamflow_path, mode='w')
+    zarr_hierarchy = zarr.open_group(streamflow_path, mode='r')
 
 
 def calculate_from_qr_files(cfg: DictConfig) -> None:
@@ -173,9 +177,9 @@ def calculate_from_qr_files(cfg: DictConfig) -> None:
             file = file_paths[i]
             df = pd.read_csv(file, dtype=np.float32, header=None)
             for val in values:
-                id = list(val.keys())[0]
-                columns.append(id)
-                row = attrs_df[attrs_df["gage_ID"] == id]
+                _id = list(val.keys())[0]
+                columns.append(_id)
+                row = attrs_df[attrs_df["gage_ID"] == _id]
                 try:
                     attr_idx = row.index[0]
                     try:
@@ -202,14 +206,30 @@ def calculate_from_qr_files(cfg: DictConfig) -> None:
         {"streamflow": (["time", "HUC10"], array)},
         coords={"time": date_range, "HUC10": column_keys},
     )
-    ds_interpolated = ds.interp(
-        time=pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="H"),
-        method="linear",
-    )
-    ds_interpolated.to_zarr(Path(cfg.zarr.streamflow))
+    ds.to_zarr(Path(cfg.zarr.streamflow))
 
 
-def interpolate_chunk(data_chunk, date_index):
-    df = pd.DataFrame(data_chunk, index=date_index)
-    df = df.resample('H').asfreq()
-    return df.interpolate(method='linear').values
+def separate_basins(cfg: DictConfig) -> Path:
+    """
+    Code provided by Yalan Song
+    :param cfg:
+    :return:
+    """
+    qr_folder = Path(cfg.save_paths.streamflow_files)
+    data_split_folder = qr_folder / f"basin_split/"
+    if data_split_folder.exists() is False:
+        data_split_folder.mkdir(parents=True, exist_ok=True)
+        attrs_df = pd.read_csv(Path(cfg.save_paths.attributes))
+        basin_ids = attrs_df.gage_ID.values
+        batch_size = 1000
+        start_idx = np.arange(0, len(basin_ids), batch_size)
+        end_idx = np.append(start_idx[1:], len(basin_ids))
+        for idx in trange(len(start_idx), desc="reading files"):
+            basin_ids_np = pd.read_csv(qr_folder / f"Qr_{start_idx[idx]}_{end_idx[idx]}", dtype=np.float32, header=None).values
+            attribute_batch_df = pd.read_csv(qr_folder / "attributes" / f"attributes_{start_idx[idx]}_{end_idx[idx]}.csv")
+            attribute_batch_ids = attribute_batch_df.gage_ID.values
+            for idx, _id in enumerate(tqdm(attribute_batch_ids, desc="saving predictions separately")):
+                formatted_id = str(int(_id)).zfill(10)
+                qr = basin_ids_np[idx:idx + 1, :]
+                np.save(data_split_folder / f"{formatted_id}.npy", qr)
+    return data_split_folder
