@@ -115,10 +115,14 @@ log = logging.getLogger(__name__)
 #     return grouped_values
 
 
-def calculate_from_individual_files(cfg: DictConfig,  streamflow_files_path: Path) -> None:
+def calculate_from_individual_files(
+    cfg: DictConfig, streamflow_files_path: Path
+) -> None:
     attrs_df = pd.read_csv(cfg.save_paths.attributes)
-    attrs_df['gage_ID'] = attrs_df['gage_ID'].astype(str).str.zfill(10)  # Left padding a 0 to make sure that all gages can be read
-    id_to_area = attrs_df.set_index('gage_ID')['area'].to_dict()
+    attrs_df["gage_ID"] = (
+        attrs_df["gage_ID"].astype(str).str.zfill(10)
+    )  # Left padding a 0 to make sure that all gages can be read
+    id_to_area = attrs_df.set_index("gage_ID")["area"].to_dict()
 
     huc_to_merit_TM = zarr.open(Path(cfg.zarr.HUC_TM), mode="r")
     huc_10_list = huc_to_merit_TM.HUC10[:]
@@ -130,7 +134,9 @@ def calculate_from_individual_files(cfg: DictConfig,  streamflow_files_path: Pat
             file_path = streamflow_files_path / f"{huc_id}.npy"
             data = np.load(file_path)
             file_id = file_path.stem
-            area = id_to_area.get(file_id)  # defaulting to mean area if there is no area for the HUC10
+            area = id_to_area.get(
+                file_id
+            )  # defaulting to mean area if there is no area for the HUC10
             data = data * area * 1000 / 86400
             streamflow_data[:, i] = data
         except FileNotFoundError:
@@ -141,15 +147,15 @@ def calculate_from_individual_files(cfg: DictConfig,  streamflow_files_path: Pat
     data_array = xr.DataArray(
         data=streamflow_data,
         dims=["time", "HUC10"],  # Explicitly naming the dimensions
-        coords={"time": date_range, "HUC10": huc_10_list}  # Adding coordinates
+        coords={"time": date_range, "HUC10": huc_10_list},  # Adding coordinates
     )
     xr_dataset = xr.Dataset(
         data_vars={"streamflow": data_array},
-        attrs={"description": "Streamflow -> HUC Predictions"}
+        attrs={"description": "Streamflow -> HUC Predictions"},
     )
     streamflow_path = Path(cfg.zarr.streamflow)
-    xr_dataset.to_zarr(streamflow_path, mode='w')
-    zarr_hierarchy = zarr.open_group(streamflow_path, mode='r')
+    xr_dataset.to_zarr(streamflow_path, mode="w")
+    zarr_hierarchy = zarr.open_group(streamflow_path, mode="r")
 
 
 # def calculate_from_qr_files(cfg: DictConfig) -> None:
@@ -225,11 +231,28 @@ def separate_basins(cfg: DictConfig) -> Path:
         start_idx = np.arange(0, len(basin_ids), batch_size)
         end_idx = np.append(start_idx[1:], len(basin_ids))
         for idx in trange(len(start_idx), desc="reading files"):
-            basin_ids_np = pd.read_csv(qr_folder / f"Qr_{start_idx[idx]}_{end_idx[idx]}", dtype=np.float32, header=None).values
-            attribute_batch_df = pd.read_csv(qr_folder / "attributes" / f"attributes_{start_idx[idx]}_{end_idx[idx]}.csv")
+            try:
+                basin_ids_np = pd.read_csv(
+                    qr_folder / f"Qr_{start_idx[idx]}_{end_idx[idx]}",
+                    dtype=np.float32,
+                    header=None,
+                ).values
+            except FileNotFoundError:
+                basin_ids_np = pd.read_csv(
+                    qr_folder / f"out0_{start_idx[idx]}_{end_idx[idx]}",
+                    dtype=np.float32,
+                    header=None,
+                ).values
+            attribute_batch_df = pd.read_csv(
+                qr_folder
+                / "attributes"
+                / f"attributes_{start_idx[idx]}_{end_idx[idx]}.csv"
+            )
             attribute_batch_ids = attribute_batch_df.gage_ID.values
-            for idx, _id in enumerate(tqdm(attribute_batch_ids, desc="saving predictions separately")):
+            for idx, _id in enumerate(
+                tqdm(attribute_batch_ids, desc="saving predictions separately")
+            ):
                 formatted_id = str(int(_id)).zfill(10)
-                qr = basin_ids_np[idx:idx + 1, :]
+                qr = basin_ids_np[idx : idx + 1, :]
                 np.save(data_split_folder / f"{formatted_id}.npy", qr)
     return data_split_folder

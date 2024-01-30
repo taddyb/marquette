@@ -13,7 +13,7 @@ continent: 7
 area: 3
 num_partitions: 64
 zone: ${continent}${area}
-streamflow_version: dpl_v2.5
+streamflow_version: dpl_v1
 filter: True
 pad_gage_id: True
 save_paths:
@@ -25,8 +25,8 @@ save_paths:
   huc10: ${data_path}/HUC/raw_observations/huc_10_CONUS.shp
   streamflow_files: ${data_path}/streamflow/predictions/${streamflow_version}/
 csv:
-  gage_information: ${data_path}/MERIT/gage_information/gages_3000_merit_info.csv
-  zone_gage_information: ${data_path}/MERIT/gage_information/${zone}.csv
+  gage_information: ${data_path}/${name}/gage_information/gages_3000_merit_info.csv
+  zone_gage_information: ${data_path}/${name}/gage_information/${zone}.csv
 zarr:
   edges: ${data_path}/${name}/zarr/graph/edges/
   gage_coo_indices: ${data_path}/MERIT/zarr/gage_coo_indices
