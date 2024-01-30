@@ -6,27 +6,27 @@ units: mm/day
 date_codes: ${data_path}/date_codes.json
 is_streamflow_split: true
 start_date: 01-01-1980
-end_date: 12-31-2019
-#end_date: 12-31-2020
+#end_date: 12-31-2019
+end_date: 12-31-2020
 drainage_area_treshold: 0.1
 continent: 7
-area: 3
+area: 2
 num_partitions: 64
 zone: ${continent}${area}
-streamflow_version: dpl_v1
-filter: True
+streamflow_version: dpl_v3
+filter: False
 pad_gage_id: True
 save_paths:
   gage_locations: ${data_path}/HUC/raw_observations/gages3000Info.csv
-  usgs_flowline_intersections: ${data_path}/HUC/raw_observations/gage_9322_intersection.shp
-  attributes: ${data_path}/streamflow/attributes_${streamflow_version}.csv
+  usgs_flowline_intersections: ${data_path}/HUC/raw_observations/srb_formatted_gage_points.shp
+  attributes: ${data_path}/streamflow/attributes_dpl_v2.csv
   basins: ${data_path}/${name}/raw/basins/cat_pfaf_${continent}${area}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
   flow_lines: ${data_path}/${name}/raw/flowlines
   huc10: ${data_path}/HUC/raw_observations/huc_10_CONUS.shp
   streamflow_files: ${data_path}/streamflow/predictions/${streamflow_version}/
 csv:
-  gage_information: ${data_path}/${name}/gage_information/gages_3000_merit_info.csv
-  zone_gage_information: ${data_path}/${name}/gage_information/${zone}.csv
+  gage_information: ${data_path}/MERIT/gage_information/srb_merit_info.csv
+  zone_gage_information: ${data_path}/MERIT/gage_information/srb_${zone}.csv
 zarr:
   edges: ${data_path}/${name}/zarr/graph/edges/
   gage_coo_indices: ${data_path}/MERIT/zarr/gage_coo_indices

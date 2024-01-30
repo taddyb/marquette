@@ -32,66 +32,23 @@ from marquette.merit._TM_calculations import (
     join_geospatial_data,
 )
 from marquette.merit._streamflow_conversion_functions import (
-    calculate_from_qr_files,
     calculate_from_individual_files,
+    separate_basins,
 )
 
 
 def write_streamflow(cfg: DictConfig) -> None:
     """
     Process and write streamflow data to a Zarr store.
-
-    This function reads streamflow data from CSV files, processes it according to
-    the provided configuration, and writes the results to a Zarr store. It handles
-    the conversion of streamflow units, sorting of data into bins, and management of
-    missing data. The function creates two Zarr datasets: one for the streamflow
-    predictions and another for the corresponding HUC keys.
-
-    Parameters:
-    cfg (DictConfig): A Hydra DictConfig object containing configuration settings.
-                      The configuration should include paths for streamflow files,
-                      attribute files, Zarr store locations, and unit settings.
-
-    Raises:
-    IndexError: If an index error occurs while processing the streamflow data. This
-                can happen if there's a mismatch between the data in the CSV files
-                and the expected structure or if a specific HUC is missing in the
-                attributes file.
-
-    Notes:
-    - The function assumes the streamflow data is in CSV files located in a specified
-      directory and that the HUC IDs are present in an attributes CSV file.
-    - The function handles unit conversion (e.g., from mm/day to m³/s) based on the
-      configuration settings.
-    - Data is sorted and binned based on HUC IDs, and missing data for any HUC is
-      handled by inserting zeros.
-    - The processed data is stored in a Zarr store with separate datasets for streamflow
-      predictions and HUC keys.
-
-    Example Usage:
-    --------------
-    cfg = DictConfig({
-        'save_paths': {
-            'attributes': 'path/to/attributes.csv',
-            'streamflow_files': 'path/to/streamflow/files'
-        },
-        'zarr': {
-            'HUC_TM': 'path/to/huc_tm.zarr',
-            'streamflow': 'path/to/streamflow.zarr',
-            'streamflow_keys': 'path/to/streamflow_keys.zarr'
-        },
-        'units': 'mm/day'
-    })
-    write_streamflow(cfg)
     """
     streamflow_path = Path(cfg.zarr.streamflow)
     if streamflow_path.exists() is False:
-        if cfg.streamflow_version.lower() == "dpl_v3":
+        if cfg.streamflow_version.lower() == "dpl_v2" or cfg.streamflow_version.lower() == "dpl_v2.5" or cfg.streamflow_version.lower() == "dpl_v1":
             """Expecting to read from individual files"""
-            calculate_from_individual_files(cfg)
+            streamflow_files_path = separate_basins(cfg)
         else:
-            """Expecting to read data from QR files"""
-            calculate_from_qr_files(cfg)
+            streamflow_files_path = Path(cfg.save_paths.streamflow_files)
+        calculate_from_individual_files(cfg, streamflow_files_path)
     else:
         log.info("Streamflow data already exists")
 
@@ -241,33 +198,22 @@ def create_N(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
         Path(cfg.zarr.gage_coo_indices), mode="a"
     )
     zone_root = gage_coo_root.require_group(cfg.zone)
-    create_gage_connectivity(edges, zone_root, zone_csv)
+    create_gage_connectivity(cfg, edges, zone_root, zone_csv)
     log.info("All sparse matrices are created")
 
 
-def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> (zarr.hierarchy.Group, zarr.hierarchy.Group):
+def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
     huc_to_merit_path = Path(cfg.zarr.HUC_TM)
     if huc_to_merit_path.exists():
         log.info("HUC -> MERIT data already exists in zarr format")
-        huc_to_merit_TM = zarr.open(huc_to_merit_path, mode="r")
     else:
         log.info(f"Creating HUC10 -> MERIT TM")
         overlayed_merit_basins = join_geospatial_data(cfg)
-        huc_to_merit_TM = create_HUC_MERIT_TM(cfg, overlayed_merit_basins)
+        create_HUC_MERIT_TM(cfg, edges, overlayed_merit_basins)
     merit_to_river_graph_path = Path(cfg.zarr.MERIT_TM)
     if merit_to_river_graph_path.exists():
         log.info("MERIT -> FLOWLINE data already exists in zarr format")
-        merit_to_river_graph_TM = zarr.open(merit_to_river_graph_path, mode="r")
     else:
         log.info(f"Creating MERIT -> FLOWLINE TM")
-        merit_to_river_graph_TM = create_MERIT_FLOW_TM(cfg, edges, huc_to_merit_TM)
-    return merit_to_river_graph_TM, huc_to_merit_TM
-
-
-def calculate_lateral_inflow(cfg: DictConfig) -> None:
-    xr_streamflow_to_huc_TM = xr.open_zarr(Path(cfg.zarr.streamflow))
-    xr_huc_to_merit_TM = xr.open_zarr(Path(cfg.zarr.HUC_TM))
-    xr_merit_to_edge_TM = xr.open_zarr(Path(cfg.zarr.MERIT_TM))
-    streamflow_merit = xr.dot(xr_streamflow_to_huc_TM['streamflow'], xr_huc_to_merit_TM['TM'])
-    streamflow_edges = xr.dot(streamflow_merit, xr_merit_to_edge_TM['TM'])
+        create_MERIT_FLOW_TM(cfg, edges)
 
