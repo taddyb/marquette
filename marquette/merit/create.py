@@ -24,7 +24,10 @@ from marquette.merit._edge_calculations import (
     sort_xarray_dataarray,
 )
 
-from marquette.merit._connectivity_matrix import create_gage_connectivity, map_gages_to_zone
+from marquette.merit._connectivity_matrix import (
+    create_gage_connectivity,
+    map_gages_to_zone,
+)
 
 from marquette.merit._TM_calculations import (
     create_HUC_MERIT_TM,
@@ -43,7 +46,12 @@ def write_streamflow(cfg: DictConfig) -> None:
     """
     streamflow_path = Path(cfg.zarr.streamflow)
     if streamflow_path.exists() is False:
-        if cfg.streamflow_version.lower() == "dpl_v2" or cfg.streamflow_version.lower() == "dpl_v2.5" or cfg.streamflow_version.lower() == "dpl_v1":
+        if (
+            cfg.streamflow_version.lower() == "dpl_v2"
+            or cfg.streamflow_version.lower() == "dpl_v2.5"
+            or cfg.streamflow_version.lower() == "dpl_v1"
+            or cfg.streamflow_version.lower() == "dpl_v3-pre"
+        ):
             """Expecting to read from individual files"""
             streamflow_files_path = separate_basins(cfg)
         else:
@@ -194,9 +202,7 @@ def create_N(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
         zone_csv = pd.read_csv(zone_csv_path)
     else:
         zone_csv = map_gages_to_zone(cfg, edges)
-    gage_coo_root = zarr.open_group(
-        Path(cfg.zarr.gage_coo_indices), mode="a"
-    )
+    gage_coo_root = zarr.open_group(Path(cfg.zarr.gage_coo_indices), mode="a")
     zone_root = gage_coo_root.require_group(cfg.zone)
     create_gage_connectivity(cfg, edges, zone_root, zone_csv)
     log.info("All sparse matrices are created")
@@ -216,4 +222,3 @@ def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
     else:
         log.info(f"Creating MERIT -> FLOWLINE TM")
         create_MERIT_FLOW_TM(cfg, edges)
-
