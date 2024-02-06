@@ -118,18 +118,18 @@ log = logging.getLogger(__name__)
 def calculate_from_individual_files(
     cfg: DictConfig, streamflow_files_path: Path
 ) -> None:
-    attrs_df = pd.read_csv(cfg.save_paths.attributes)
+    attrs_df = pd.read_csv(cfg.create_streamflow.obs_attributes)
     attrs_df["gage_ID"] = (
         attrs_df["gage_ID"].astype(str).str.zfill(10)
     )  # Left padding a 0 to make sure that all gages can be read
     id_to_area = attrs_df.set_index("gage_ID")["area"].to_dict()
 
-    huc_to_merit_TM = zarr.open(Path(cfg.zarr.HUC_TM), mode="r")
+    huc_to_merit_TM = zarr.open(Path(cfg.create_TMs.HUC.TM), mode="r")
     huc_10_list = huc_to_merit_TM.HUC10[:]
-    date_range = pd.date_range(start=cfg.start_date, end=cfg.end_date, freq="D")
+    date_range = pd.date_range(start=cfg.create_streamflow.start_date, end=cfg.create_streamflow.end_date, freq="D")
     streamflow_data = np.zeros((len(date_range), len(huc_10_list)))
 
-    for i, huc_id in enumerate(tqdm(huc_10_list, desc="Processing River flowlines")):
+    for i, huc_id in enumerate(tqdm(huc_10_list, desc="Processing River flowlines", ncols=140, ascii=True,)):
         try:
             file_path = streamflow_files_path / f"{huc_id}.npy"
             data = np.load(file_path)
@@ -137,6 +137,7 @@ def calculate_from_individual_files(
             area = id_to_area.get(
                 file_id
             )  # defaulting to mean area if there is no area for the HUC10
+            # CONVERTING FROM MM/DAY TO M3/S
             data = data * area * 1000 / 86400
             streamflow_data[:, i] = data
         except FileNotFoundError:
@@ -153,7 +154,7 @@ def calculate_from_individual_files(
         data_vars={"streamflow": data_array},
         attrs={"description": "Streamflow -> HUC Predictions"},
     )
-    streamflow_path = Path(cfg.zarr.streamflow)
+    streamflow_path = Path(cfg.create_streamflow.data_store)
     xr_dataset.to_zarr(streamflow_path, mode="w")
     zarr_hierarchy = zarr.open_group(streamflow_path, mode="r")
 
@@ -221,11 +222,11 @@ def separate_basins(cfg: DictConfig) -> Path:
     :param cfg:
     :return:
     """
-    qr_folder = Path(cfg.save_paths.streamflow_files)
+    qr_folder = Path(cfg.create_streamflow.predictions)
     data_split_folder = qr_folder / f"basin_split/"
     if data_split_folder.exists() is False:
         data_split_folder.mkdir(parents=True, exist_ok=True)
-        attrs_df = pd.read_csv(Path(cfg.save_paths.attributes))
+        attrs_df = pd.read_csv(Path(cfg.create_streamflow.obs_attributes))
         basin_ids = attrs_df.gage_ID.values
         batch_size = 1000
         start_idx = np.arange(0, len(basin_ids), batch_size)
@@ -250,7 +251,7 @@ def separate_basins(cfg: DictConfig) -> Path:
             )
             attribute_batch_ids = attribute_batch_df.gage_ID.values
             for idx, _id in enumerate(
-                tqdm(attribute_batch_ids, desc="saving predictions separately")
+                tqdm(attribute_batch_ids, desc="saving predictions separately", ncols=140, ascii=True,)
             ):
                 formatted_id = str(int(_id)).zfill(10)
                 qr = basin_ids_np[idx : idx + 1, :]

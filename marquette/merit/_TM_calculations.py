@@ -28,7 +28,7 @@ def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.G
     data_array = xr.DataArray(np.zeros((len(huc10_ids), len(merit_ids))),
                               dims=["HUC10", "COMID"],
                               coords={"HUC10": huc10_ids, "COMID": merit_ids})
-    for idx, huc_id in enumerate(tqdm(huc10_ids, desc="creating TM")):
+    for idx, huc_id in enumerate(tqdm(huc10_ids, desc="creating TM", ncols=140, ascii=True,)):
         merit_basins = gdf[gdf['HUC10'] == str(huc_id)]
         total_area = merit_basins.iloc[0]["area_new"]
 
@@ -41,9 +41,9 @@ def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.G
         attrs={"description": "HUC10 -> MERIT Transition Matrix"}
     )
     print("Saving Zarr Data")
-    zarr_path = Path(cfg.zarr.HUC_TM)
+    zarr_path = Path(cfg.create_TMs.HUC.TM)
     xr_dataset.to_zarr(zarr_path, mode='w')
-    zarr_hierarchy = zarr.open_group(Path(cfg.zarr.HUC_TM), mode='r')
+
 
 
 def create_MERIT_FLOW_TM(
@@ -66,7 +66,7 @@ def create_MERIT_FLOW_TM(
         dims=["COMID", "EDGEID"],  # Explicitly naming the dimensions
         coords={"COMID": COMIDs, "EDGEID": river_graph_ids}  # Adding coordinates
     )
-    for i, basin_id in enumerate(tqdm(COMIDs, desc="Processing River flowlines")):
+    for i, basin_id in enumerate(tqdm(COMIDs, desc="Processing River flowlines", ncols=140, ascii=True,)):
         indices = np.where(merit_basin == basin_id)[0]
 
         total_length = np.sum(river_graph_len[indices])
@@ -81,7 +81,7 @@ def create_MERIT_FLOW_TM(
         data_vars={"TM": data_array},
         attrs={"description": "MERIT -> Edge Transition Matrix"}
     )
-    zarr_path = Path(cfg.zarr.MERIT_TM)
+    zarr_path = Path(cfg.create_TMs.MERIT.TM)
     xr_dataset.to_zarr(zarr_path, mode='w')
     zarr_hierarchy = zarr.open_group(Path(cfg.zarr.MERIT_TM), mode='r')
 
@@ -97,8 +97,8 @@ def join_geospatial_data(cfg: DictConfig) -> gpd.GeoDataFrame:
     Returns:
     gpd.GeoDataFrame: The resulting joined GeoDataFrame.
     """
-    huc10_gdf = gpd.read_file(Path(cfg.save_paths.huc10)).to_crs(epsg=4326)
-    basins_gdf = gpd.read_file(Path(cfg.save_paths.basins))
+    huc10_gdf = gpd.read_file(Path(cfg.create_TMs.HUC.shp_files)).to_crs(epsg=4326)
+    basins_gdf = gpd.read_file(Path(cfg.create_TMs.MERIT.shp_files))
     basins_gdf['centroid'] = basins_gdf.geometry.centroid
     joined_gdf = gpd.sjoin(basins_gdf.set_geometry('centroid'), huc10_gdf, how='left', predicate='intersects')
     joined_gdf.set_geometry('geometry', inplace=True)

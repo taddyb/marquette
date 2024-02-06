@@ -3,12 +3,12 @@ import logging
 from pathlib import Path
 
 import dask.dataframe as dd
+import fiona
 import geopandas as gpd
 import numpy as np
 from omegaconf import DictConfig
 import pandas as pd
 from tqdm import tqdm
-import torch
 import xarray as xr
 import zarr
 
@@ -24,7 +24,11 @@ from marquette.merit._edge_calculations import (
     sort_xarray_dataarray,
 )
 
-from marquette.merit._connectivity_matrix import create_gage_connectivity, map_gages_to_zone
+from marquette.merit._connectivity_matrix import (
+    create_gage_connectivity,
+    map_gages_to_zone,
+    new_zone_connectivity,
+)
 
 from marquette.merit._TM_calculations import (
     create_HUC_MERIT_TM,
@@ -41,9 +45,11 @@ def write_streamflow(cfg: DictConfig) -> None:
     """
     Process and write streamflow data to a Zarr store.
     """
-    streamflow_path = Path(cfg.zarr.streamflow)
+    streamflow_path = Path(cfg.create_streamflow.data_store)
+    version = cfg.create_streamflow.version.lower()
+    split_output = ["dpl_v1", "dpl_v2", "dpl_v2.5", "dpl_v3-pre"]
     if streamflow_path.exists() is False:
-        if cfg.streamflow_version.lower() == "dpl_v2" or cfg.streamflow_version.lower() == "dpl_v2.5" or cfg.streamflow_version.lower() == "dpl_v1":
+        if (version in split_output):
             """Expecting to read from individual files"""
             streamflow_files_path = separate_basins(cfg)
         else:
@@ -54,16 +60,16 @@ def write_streamflow(cfg: DictConfig) -> None:
 
 
 def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
-    root = zarr.open_group(Path(cfg.zarr.edges), mode="a")
-    group_name = f"{cfg.continent}{cfg.area}"
+    root = zarr.open_group(Path(cfg.create_edges.edges), mode="a")
+    group_name = f"{cfg.zone}"
     if group_name in root:
         log.info("Edge data already exists in zarr format")
         edges = root.require_group(group_name)
     else:
         flowline_file = find_flowlines(cfg)
         polyline_gdf = gpd.read_file(flowline_file)
-        dx = cfg.dx  # Unit: Meters
-        buffer = cfg.buffer * dx  # Unit: Meters
+        dx = cfg.create_edges.dx  # Unit: Meters
+        buffer = cfg.create_edges.buffer * dx  # Unit: Meters
         for col in [
             "COMID",
             "NextDownID",
@@ -88,20 +94,20 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
         num_edges_dict = {
             _segment["id"]: calculate_num_edges(_segment["len"], dx, buffer)
             for _, _segment in tqdm(
-                segments_dict.items(), desc="Processing Number of Edges"
+                segments_dict.items(), desc="Processing Number of Edges", ncols=140, ascii=True,
             )
         }
         one_edge_segment = {
             seg_id: edge_info
             for seg_id, edge_info in tqdm(
-                num_edges_dict.items(), desc="Filtering Segments == 1"
+                num_edges_dict.items(), desc="Filtering Segments == 1", ncols=140, ascii=True,
             )
             if edge_info[0] == 1
         }
         many_edge_segment = {
             seg_id: edge_info
             for seg_id, edge_info in tqdm(
-                num_edges_dict.items(), desc="Filtering Segments > 1"
+                num_edges_dict.items(), desc="Filtering Segments > 1", ncols=140, ascii=True,
             )
             if edge_info[0] > 1
         }
@@ -122,8 +128,8 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
         df_many = pd.DataFrame.from_dict(
             segments_with_more_than_one_edge, orient="index"
         )
-        ddf_one = dd.from_pandas(df_one, npartitions=cfg.num_partitions)
-        ddf_many = dd.from_pandas(df_many, npartitions=cfg.num_partitions)
+        ddf_one = dd.from_pandas(df_one, npartitions=64)
+        ddf_many = dd.from_pandas(df_many, npartitions=64)
 
         meta = pd.DataFrame(
             {
@@ -189,31 +195,38 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
 
 
 def create_N(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
-    zone_csv_path = Path(cfg.csv.zone_gage_information)
-    if zone_csv_path.exists():
-        zone_csv = pd.read_csv(zone_csv_path)
-    else:
-        zone_csv = map_gages_to_zone(cfg, edges)
-    gage_coo_root = zarr.open_group(
-        Path(cfg.zarr.gage_coo_indices), mode="a"
-    )
+    gage_coo_root = zarr.open_group(Path(cfg.create_N.gage_coo_indices), mode="a")
     zone_root = gage_coo_root.require_group(cfg.zone)
-    create_gage_connectivity(cfg, edges, zone_root, zone_csv)
-    log.info("All sparse matrices are created")
+    if cfg.create_N.run_whole_zone:
+        if "full_zone" in zone_root:
+            log.info("Full zone already exists")
+        else:
+            full_zone_root = zone_root.require_group("full_zone")
+            new_zone_connectivity(cfg, edges, full_zone_root)
+        log.info("Full zone sparse Matrix created")
+    else:
+        zone_csv_path = Path(cfg.create_N.zone_obs_dataset)
+        if zone_csv_path.exists():
+            zone_csv = pd.read_csv(zone_csv_path)
+        else:
+            zone_csv = map_gages_to_zone(cfg, edges)
+        if zone_csv is not False:
+            create_gage_connectivity(cfg, edges, zone_root, zone_csv)
+            log.info("All sparse gage matrices are created")
 
 
 def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
-    huc_to_merit_path = Path(cfg.zarr.HUC_TM)
-    if huc_to_merit_path.exists():
-        log.info("HUC -> MERIT data already exists in zarr format")
-    else:
-        log.info(f"Creating HUC10 -> MERIT TM")
-        overlayed_merit_basins = join_geospatial_data(cfg)
-        create_HUC_MERIT_TM(cfg, edges, overlayed_merit_basins)
-    merit_to_river_graph_path = Path(cfg.zarr.MERIT_TM)
+    if "HUC" in cfg.create_TMs:
+        huc_to_merit_path = Path(cfg.create_TMs.HUC.TM)
+        if huc_to_merit_path.exists():
+            log.info("HUC -> MERIT data already exists in zarr format")
+        else:
+            log.info(f"Creating HUC10 -> MERIT TM")
+            overlayed_merit_basins = join_geospatial_data(cfg)
+            create_HUC_MERIT_TM(cfg, edges, overlayed_merit_basins)
+    merit_to_river_graph_path = Path(cfg.create_TMs.MERIT.TM)
     if merit_to_river_graph_path.exists():
         log.info("MERIT -> FLOWLINE data already exists in zarr format")
     else:
         log.info(f"Creating MERIT -> FLOWLINE TM")
         create_MERIT_FLOW_TM(cfg, edges)
-

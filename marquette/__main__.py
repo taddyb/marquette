@@ -32,17 +32,20 @@ def main(cfg: DictConfig) -> None:
             create_TMs,
             write_streamflow,
         )
-    start = time.perf_counter()
-    log.info(f"Creating MERIT {cfg.continent}{cfg.area} River Graph")
-    edges = create_edges(cfg)
-    log.info(f"Creating MERIT {cfg.continent}{cfg.area} Connectivity Matrix (N) for gages")
-    create_N(cfg, edges)
-    log.info(f"Mapping MERIT {cfg.continent}{cfg.area} Streamflow to Nodes/Edges")
-    create_TMs(cfg, edges)
-    log.info(f"Converting Streamflow to zarr")
-    write_streamflow(cfg)
-    end = time.perf_counter()
-    log.info(f"Extracting data took : {(end - start):.6f} seconds")
+        start = time.perf_counter()
+        log.info(f"Creating MERIT {cfg.zone} River Graph")
+        edges = create_edges(cfg)
+        log.info(f"Creating MERIT {cfg.zone} Connectivity Matrix (N) for gages")
+        create_N(cfg, edges)
+        log.info(f"Mapping HUC10 {cfg.zone} Streamflow to Nodes/Edges")
+        create_TMs(cfg, edges)
+        log.info(f"Converting Streamflow to zarr")
+        write_streamflow(cfg)
+        end = time.perf_counter()
+        log.info(f"Extracting data took : {(end - start):.6f} seconds")
+    else:
+        log.error(f"incorrect name specified: {cfg.name}")
+
 
 
 def _missing_files(cfg: DictConfig) -> bool:
