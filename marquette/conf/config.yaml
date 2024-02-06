@@ -1,6 +1,5 @@
 name: MERIT
 data_path: /data/shared_data/${name}
-#data_path: /data/tkb5476/projects/marquette/data/${name}
 zone: 72
 create_edges:
   buffer: 0.3334
@@ -14,12 +13,9 @@ create_N:
   gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gage_9322_intersection.shp
   gage_coo_indices: ${data_path}/zarr/gage_coo_indices
   pad_gage_id: True
-#  obs_dataset: ${data_path}/gage_information/obs_csvs/gages3000Info.csv
-  obs_dataset: ${data_path}/gage_information/obs_csvs/attributes_EVALUATION.csv
-#  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_merit_info.csv
-  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_validation_merit_info.csv
-#  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}.csv
-  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/validation_${zone}.csv
+  obs_dataset: ${data_path}/gage_information/obs_csvs/gages3000Info.csv
+  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_merit_info.csv
+  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}.csv
 create_TMs:
   HUC:
     TM: ${data_path}/zarr/TMs/PFAF_${zone}
@@ -28,11 +24,12 @@ create_TMs:
     TM: ${data_path}/zarr/TMs/MERIT_FLOWLINES_${zone}
     shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
 create_streamflow:
-  data_store: ${data_path}/streamflow/zarr/${streamflow_version}/${zone}
-  obs_attributes: ${data_path}/streamflow/attributes_${streamflow_version}.csv
-  predictions: ${data_path}/streamflow/predictions/${streamflow_version}/
+  version: dpl_v3-pre
+  data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}/${zone}
+  obs_attributes: ${data_path}/streamflow/attributes_${create_streamflow.version}.csv
+  predictions: ${data_path}/streamflow/predictions/${create_streamflow.version}/
   start_date: 01-01-1980
   #end_date: 12-31-2019
   end_date: 12-31-2020
-  version: dpl_v3-pre
+
 

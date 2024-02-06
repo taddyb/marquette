@@ -91,8 +91,8 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         Returns:
         GeoDataFrame: Filtered GeoDataFrame.
         """
-        gdf["MERIT_ZONE"] = gdf["COMID"].astype(str)
-        filtered_gdf = gdf[gdf["MERIT_ZONE"].str[:2] == prefix]
+        gdf["MERIT_ZONE"] = gdf["COMID"].astype(str).str[:2]
+        filtered_gdf = gdf[gdf["MERIT_ZONE"] == str(prefix)]
         return filtered_gdf
 
     def find_closest_edge(

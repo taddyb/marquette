@@ -1,35 +1,33 @@
 name: MERIT
-data_path: /data/tkb5476/projects/marquette/data/
-dx: 2000
-buffer: 0.3334
-units: mm/day
-date_codes: ${data_path}/date_codes.json
-is_streamflow_split: true
-start_date: 01-01-1980
-#end_date: 12-31-2019
-end_date: 12-31-2020
-drainage_area_treshold: 0.1
-continent: 7
-area: 4
-num_partitions: 64
-zone: ${continent}${area}
-streamflow_version: dpl_v3-pre
-filter: True
-pad_gage_id: True
-save_paths:
-  gage_locations: ${data_path}/HUC/raw_observations/gages3000Info.csv
-  usgs_flowline_intersections: ${data_path}/HUC/raw_observations/gage_9322_intersection.shp
-  attributes: ${data_path}/streamflow/attributes_${streamflow_version}.csv
-  basins: ${data_path}/${name}/raw/basins/cat_pfaf_${continent}${area}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
-  flow_lines: ${data_path}/${name}/raw/flowlines
-  huc10: ${data_path}/HUC/raw_observations/huc_10_CONUS.shp
-  streamflow_files: ${data_path}/streamflow/predictions/${streamflow_version}/
-csv:
-  gage_information: ${data_path}/${name}/gage_information/gages_3000_merit_info.csv
-  zone_gage_information: ${data_path}/${name}/gage_information/${zone}.csv
-zarr:
-  edges: ${data_path}/${name}/zarr/graph/edges/
-  gage_coo_indices: ${data_path}/MERIT/zarr/gage_coo_indices
-  HUC_TM: ${data_path}/${name}/zarr/TMs/PFAF_${continent}${area}
-  MERIT_TM: ${data_path}/${name}/zarr/TMs/MERIT_FLOWLINES_${continent}${area}
-  streamflow: ${data_path}/streamflow/zarr/${streamflow_version}/${zone}
+data_path: /data/shared_data/${name}
+zone: 72
+create_edges:
+  buffer: 0.3334
+  dx: 2000
+  edges: ${data_path}/zarr/graph/edges/
+  flowlines: ${data_path}/raw/flowlines
+create_N:
+  run_whole_zone: False
+  drainage_area_treshold: 0.1
+  filter_based_on_dataset: True
+  gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gage_9322_intersection.shp
+  gage_coo_indices: ${data_path}/zarr/gage_coo_indices
+  pad_gage_id: True
+  obs_dataset: ${data_path}/gage_information/obs_csvs/gages3000Info.csv
+  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_merit_info.csv
+  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}.csv
+create_TMs:
+  HUC:
+    TM: ${data_path}/zarr/TMs/PFAF_${zone}
+    shp_files: ${data_path}/huc_shp_files/huc_10_CONUS.shp
+  MERIT:
+    TM: ${data_path}/zarr/TMs/MERIT_FLOWLINES_${zone}
+    shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
+create_streamflow:
+  version: dpl_v3-pre
+  data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}/${zone}
+  obs_attributes: ${data_path}/streamflow/attributes_${create_streamflow.version}.csv
+  predictions: ${data_path}/streamflow/predictions/${create_streamflow.version}/
+  start_date: 01-01-1980
+  #end_date: 12-31-2019
+  end_date: 12-31-2020
