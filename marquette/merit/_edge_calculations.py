@@ -292,8 +292,8 @@ def find_flowlines(cfg: DictConfig) -> Path:
     IndexError
         Raised if no flowlines are found with your MERIT region code
     """
-    flowline_path = Path(cfg.save_paths.flow_lines)
-    region_id = f"_{cfg.continent}{cfg.area}_"
+    flowline_path = Path(cfg.create_edges.flowlines)
+    region_id = f"_{cfg.zone}_"
     matching_file = flowline_path.glob(f"*{region_id}*.shp")
     try:
         found_file = [file for file in matching_file][0]
@@ -328,7 +328,7 @@ def many_segment_to_edge_partition(
         DataFrame containing edge data for all segments in the partition.
     """
     all_edges = []
-    for _, segment in tqdm(df.iterrows(), total=len(df), desc="Processing Segments"):
+    for _, segment in tqdm(df.iterrows(), total=len(df), desc="Processing Segments", ncols=140, ascii=True,):
         all_segment_edges = []
         num_edges, edge_len = edge_info[segment["id"]]
         up_ids = get_upstream_ids(segment, num_edge_dict)
@@ -386,7 +386,7 @@ def singular_segment_to_edge_partition(
     """
     all_edges = []
     num_edges = 1
-    for _, segment in tqdm(df.iterrows(), total=len(df)):
+    for _, segment in tqdm(df.iterrows(), total=len(df), ncols=140, ascii=True,):
         __, edge_len = edge_info[segment["id"]]
         up_ids = get_upstream_ids(segment, num_edge_dict)
         edge = create_edge_json(
@@ -440,7 +440,7 @@ def sort_based_on_keys(array_to_sort, keys, segment_sorted_index):
     A sorted version of 'array_to_sort'.
     """
     sorted_array = []
-    for key in tqdm(keys):
+    for key in tqdm(keys, ncols=140, ascii=True,):
         matching_indices = np.where(segment_sorted_index == key)[0]
         if len(matching_indices) > 1:
             sorted_indices = np.sort(matching_indices)

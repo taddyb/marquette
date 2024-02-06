@@ -150,7 +150,7 @@ class Segment:
 def get_edge_counts(segments, dx, buffer):
     edge_counts = {}
 
-    for segment in tqdm(segments, desc="Creating edges"):
+    for segment in tqdm(segments, desc="Creating edges", ncols=140, ascii=True,):
         try:
             line = LineString(segment.coords)
         except TypeError:
@@ -328,7 +328,7 @@ def _find_flowlines(cfg: DictConfig) -> Path:
         Raised if no flowlines are found with your MERIT region code
     """
     flowline_path = Path(cfg.save_paths.flow_lines)
-    region_id = f"_{cfg.continent}{cfg.area}_"
+    region_id = f"_{cfg.zone}_"
     matching_file = flowline_path.glob(f"*{region_id}*.shp")
     try:
         found_file = [file for file in matching_file][0]

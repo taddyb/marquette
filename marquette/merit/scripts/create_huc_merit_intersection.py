@@ -53,7 +53,7 @@ def create_TM(cfg: DictConfig, gdf: gpd.GeoDataFrame) -> None:
     df = pd.DataFrame(index=huc10_ids, columns=merit_ids)
     df["HUC10"] = huc10_ids
     df = df.set_index("HUC10")
-    for idx, id in enumerate(tqdm(huc10_ids, desc="creating TM")):
+    for idx, id in enumerate(tqdm(huc10_ids, desc="creating TM", ncols=140, ascii=True,)):
         merit_basins = gdf[gdf['huc10'] == id]
         total_area = sum([merit_basins.iloc[i].unitarea for i in range(merit_basins.shape[0])])
         for j, basin in merit_basins.iterrows():
@@ -86,7 +86,7 @@ def create_intersections(cfg: DictConfig) -> None:
     log.info("created list of merit IDs")
     directory_path = Path(cfg.merit_basin_dir)
     matching_rows = []
-    for shp_path in tqdm(directory_path.glob(cfg.merit_basin_file), desc="Reading merit basins"):
+    for shp_path in tqdm(directory_path.glob(cfg.merit_basin_file), desc="Reading merit basins", ncols=140, ascii=True,):
         current_gdf = gpd.read_file(Path(shp_path))
         rows = current_gdf[current_gdf['COMID'].astype(int).isin(visited_comids)]
         if len(rows) > 0:

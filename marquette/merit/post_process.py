@@ -30,7 +30,7 @@ def post_process(cfg: DictConfig) -> None:
     file_paths.sort()
 
     for i in tqdm(
-        range(0, len(file_paths) - 1), desc=f"interpolating missing {cfg.basin} data"
+        range(0, len(file_paths) - 1), desc=f"interpolating missing {cfg.basin} data", ncols=140, ascii=True,
     ):
         try:
             _process_files(file_paths[i], file_paths[i + 1])

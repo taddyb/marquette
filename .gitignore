@@ -1,4 +1,5 @@
 data
+multirun
 outputs
 *.zip
 #--------------------- Github .gitignore
