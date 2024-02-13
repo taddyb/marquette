@@ -17,9 +17,6 @@ rasterio
 scikit-learn
 scipy
 shapely
-torch
-torchaudio
-torchvision
 tornado
 tqdm
 xarray

@@ -12,7 +12,6 @@ import numpy as np
 from omegaconf import DictConfig
 import pandas as pd
 from tqdm import tqdm
-import torch
 import xarray as xr
 import zarr
 
