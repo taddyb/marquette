@@ -61,11 +61,7 @@ def create_MERIT_FLOW_TM(
     river_graph_ids = edges.id[:]
     merit_basin = edges.merit_basin[:]
     river_graph_len = edges.len[:]
-    data_array = xr.DataArray(
-        data=np.zeros((len(COMIDs), len(river_graph_ids))),
-        dims=["COMID", "EDGEID"],  # Explicitly naming the dimensions
-        coords={"COMID": COMIDs, "EDGEID": river_graph_ids}  # Adding coordinates
-    )
+    data_np = np.zeros((len(COMIDs), len(river_graph_ids)))
     for i, basin_id in enumerate(tqdm(COMIDs, desc="Processing River flowlines", ncols=140, ascii=True,)):
         indices = np.where(merit_basin == basin_id)[0]
 
@@ -76,14 +72,20 @@ def create_MERIT_FLOW_TM(
         proportions = river_graph_len[indices] / total_length
         for idx, proportion in zip(indices, proportions):
             column_index = np.where(river_graph_ids == river_graph_ids[idx])[0][0]
-            data_array.loc[i, column_index] = proportion
+            data_np[i][column_index] = proportion
+    data_array = xr.DataArray(
+        data=data_np,
+        dims=["COMID", "EDGEID"],  # Explicitly naming the dimensions
+        coords={"COMID": COMIDs, "EDGEID": river_graph_ids}  # Adding coordinates
+    )
     xr_dataset = xr.Dataset(
         data_vars={"TM": data_array},
         attrs={"description": "MERIT -> Edge Transition Matrix"}
     )
+    log.info(f"Writing MERIT TM to zarr store")
     zarr_path = Path(cfg.create_TMs.MERIT.TM)
     xr_dataset.to_zarr(zarr_path, mode='w')
-    zarr_hierarchy = zarr.open_group(Path(cfg.zarr.MERIT_TM), mode='r')
+    zarr_hierarchy = zarr.open_group(Path(cfg.create_TMs.MERIT.TM), mode='r')
 
 
 def join_geospatial_data(cfg: DictConfig) -> gpd.GeoDataFrame:
