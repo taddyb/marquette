@@ -4,8 +4,6 @@ import time
 
 import hydra
 from omegaconf import DictConfig
-import pandas as pd
-import zarr
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +30,7 @@ def main(cfg: DictConfig) -> None:
             create_TMs,
             write_streamflow,
         )
+
         start = time.perf_counter()
         log.info(f"Creating MERIT {cfg.zone} River Graph")
         edges = create_edges(cfg)
@@ -39,13 +38,12 @@ def main(cfg: DictConfig) -> None:
         create_N(cfg, edges)
         log.info(f"Mapping HUC10 {cfg.zone} Streamflow to Nodes/Edges")
         create_TMs(cfg, edges)
-        log.info(f"Converting Streamflow to zarr")
+        log.info("Converting Streamflow to zarr")
         write_streamflow(cfg)
         end = time.perf_counter()
         log.info(f"Extracting data took : {(end - start):.6f} seconds")
     else:
         log.error(f"incorrect name specified: {cfg.name}")
-
 
 
 def _missing_files(cfg: DictConfig) -> bool:

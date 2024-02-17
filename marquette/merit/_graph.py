@@ -6,8 +6,6 @@ from omegaconf import DictConfig
 import pandas as pd
 from shapely.geometry import LineString, MultiLineString, Point
 from tqdm import tqdm
-import xarray as xr
-import zarr
 
 log = logging.getLogger(__name__)
 
@@ -123,6 +121,7 @@ class Segment:
     edge_len : type (optional)
         Edge length, initialized as None.
     """
+
     def __init__(self, row, segment_coords, crs):
         self.id = row["COMID"]
         self.order = row["order"]
@@ -150,15 +149,16 @@ class Segment:
 def get_edge_counts(segments, dx, buffer):
     edge_counts = {}
 
-    for segment in tqdm(segments, desc="Creating edges", ncols=140, ascii=True,):
+    for segment in tqdm(
+        segments,
+        desc="Creating edges",
+        ncols=140,
+        ascii=True,
+    ):
         try:
             line = LineString(segment.coords)
         except TypeError:
-            import traceback
-
-            error_message = traceback.format_exc()
             log.info(f"TypeError for segment {segment.id}. Fusing MultiLineString")
-            # log.info(f"Details: {error_message}")
             if segment.coords.geom_type == "MultiLineString":
                 multiline = MultiLineString(segment.coords)
                 # Create a list of points from all LineStrings in the MultiLineString
@@ -333,5 +333,5 @@ def _find_flowlines(cfg: DictConfig) -> Path:
     try:
         found_file = [file for file in matching_file][0]
         return found_file
-    except IndexError as e:
+    except IndexError:
         raise IndexError(f"No flowlines found using: *{region_id}*.shp")

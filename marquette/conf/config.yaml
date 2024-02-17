@@ -17,19 +17,38 @@ create_N:
   obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_merit_info.csv
   zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}.csv
 create_TMs:
-  HUC:
-    TM: ${data_path}/zarr/TMs/PFAF_${zone}
-    shp_files: ${data_path}/huc_shp_files/huc_10_CONUS.shp
+#  HUC:
+#    TM: ${data_path}/zarr/TMs/PFAF_${zone}
+#    shp_files: ${data_path}/huc_shp_files/huc_10_CONUS.shp
   MERIT:
     TM: ${data_path}/zarr/TMs/MERIT_FLOWLINES_${zone}
     shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
 create_streamflow:
-  version: dpl_v3-pre
+  version: merit_global_v2.0
   data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}/${zone}
-  obs_attributes: ${data_path}/streamflow/attributes_${create_streamflow.version}.csv
-  predictions: ${data_path}/streamflow/predictions/${create_streamflow.version}/
+#  obs_attributes: ${data_path}/streamflow/attributes_${create_streamflow.version}.csv
+  obs_attributes: /data/hjj5218/source_data/csv_file/sorted_info
+  predictions: /data/hjj5218/model_output/Merit_global/dPLHBV_Static/version2/zarr_format/${zone}
   start_date: 01-01-1980
-  #end_date: 12-31-2019
   end_date: 12-31-2020
+# Hydra Config ------------------------------------------------------------------------#
+override hydra/hydra_logging: colorlog
+override hydra/job_logging: colorlog
+hydra:
+  help:
+    app_name: marquette
+    header: == ${hydra.help.app_name} ==
+    template: |-
+      ${hydra.help.header}
+  
+      A data pipeline tool used to generate inputs to dMC river routing
+      By Tadd Bindas
 
-
+      ${hydra.help.footer}
+    footer: |-
+      Powered by Hydra (https://hydra.cc)
+      Use --hydra-help to view Hydra specific help
+  job:
+    name: ${name}
+  run:
+    dir: ../runs/${hydra.job.name}_${zone}/${now:%Y-%m-%d_%H-%M-%S}

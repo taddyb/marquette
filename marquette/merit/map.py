@@ -65,7 +65,12 @@ def create_graph(cfg):
     edge_counts = get_edge_counts(sorted_segments, dx, buffer)
     edges_ = [
         edge
-        for segment in tqdm(sorted_segments, desc="Processing segments", ncols=140, ascii=True,)
+        for segment in tqdm(
+            sorted_segments,
+            desc="Processing segments",
+            ncols=140,
+            ascii=True,
+        )
         for edge in segments_to_edges(
             segment, edge_counts, segment_das
         )  # returns many edges
@@ -133,7 +138,8 @@ def _write_to_disk(args):
         dtype="float32",
     )
     df.to_csv(
-        save_path / f"{year}_{cfg.basin}_mapped_streamflow.csv.gz", compression="gzip",
+        save_path / f"{year}_{cfg.basin}_mapped_streamflow.csv.gz",
+        compression="gzip",
     )
     log.info(f"Done with {year}")
 
@@ -162,7 +168,14 @@ def _create_TM(
         df = pd.DataFrame(index=merit_basins, columns=river_graph_ids)
         df["Merit_Basins"] = merit_basins
         df = df.set_index("Merit_Basins")
-        for idx, id in enumerate(tqdm(merit_basins, desc="creating TM", ncols=140, ascii=True,)):
+        for idx, id in enumerate(
+            tqdm(
+                merit_basins,
+                desc="creating TM",
+                ncols=140,
+                ascii=True,
+            )
+        ):
             merit_reaches = edges[edges["merit_basin"] == int(id)]
             if merit_reaches.shape[0] == 0:
                 log.error(f"Missing row for {id}")
@@ -235,9 +248,13 @@ def _create_streamflow(cfg: DictConfig, huc_10_list: np.ndarray) -> pd.DataFrame
     file_paths = [file for file in folder.glob("*") if file.is_file()]
     file_paths.sort(key=extract_numbers)
     iterable = basin_indexes.keys()
-    pbar = tqdm(iterable, ncols=140, ascii=True,)
+    pbar = tqdm(
+        iterable,
+        ncols=140,
+        ascii=True,
+    )
     for i, key in enumerate(pbar):
-        pbar.set_description(f"Processing Qr files")
+        pbar.set_description("Processing Qr files")
         values = basin_indexes[key]
         if values:
             file = file_paths[i]
