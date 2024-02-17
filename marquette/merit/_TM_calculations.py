@@ -13,7 +13,9 @@ import zarr
 log = logging.getLogger(__name__)
 
 
-def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.GeoDataFrame) -> None:
+def create_HUC_MERIT_TM(
+    cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.GeoDataFrame
+) -> None:
     """
     Create a Transfer Matrix (TM) from GeoDataFrame.
 
@@ -21,15 +23,24 @@ def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.G
         cfg (DictConfig): Hydra configuration object containing settings.
         gdf (GeoDataFrame): GeoDataFrame containing geographical data.
     """
-    gdf = gdf.dropna(subset=['HUC10'])
+    gdf = gdf.dropna(subset=["HUC10"])
     huc10_ids = gdf["HUC10"].unique()
     huc10_ids.sort()
     merit_ids = np.unique(edges.merit_basin[:])  # already sorted
-    data_array = xr.DataArray(np.zeros((len(huc10_ids), len(merit_ids))),
-                              dims=["HUC10", "COMID"],
-                              coords={"HUC10": huc10_ids, "COMID": merit_ids})
-    for idx, huc_id in enumerate(tqdm(huc10_ids, desc="creating TM", ncols=140, ascii=True,)):
-        merit_basins = gdf[gdf['HUC10'] == str(huc_id)]
+    data_array = xr.DataArray(
+        np.zeros((len(huc10_ids), len(merit_ids))),
+        dims=["HUC10", "COMID"],
+        coords={"HUC10": huc10_ids, "COMID": merit_ids},
+    )
+    for idx, huc_id in enumerate(
+        tqdm(
+            huc10_ids,
+            desc="creating TM",
+            ncols=140,
+            ascii=True,
+        )
+    ):
+        merit_basins = gdf[gdf["HUC10"] == str(huc_id)]
         total_area = merit_basins.iloc[0]["area_new"]
 
         for j, basin in merit_basins.iterrows():
@@ -38,12 +49,11 @@ def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.G
     xr_dataset = xr.Dataset(
         data_vars={"TM": data_array},
         coords={"HUC10": huc10_ids, "COMID": merit_ids},
-        attrs={"description": "HUC10 -> MERIT Transition Matrix"}
+        attrs={"description": "HUC10 -> MERIT Transition Matrix"},
     )
     print("Saving Zarr Data")
     zarr_path = Path(cfg.create_TMs.HUC.TM)
-    xr_dataset.to_zarr(zarr_path, mode='w')
-
+    xr_dataset.to_zarr(zarr_path, mode="w")
 
 
 def create_MERIT_FLOW_TM(
@@ -62,7 +72,14 @@ def create_MERIT_FLOW_TM(
     merit_basin = edges.merit_basin[:]
     river_graph_len = edges.len[:]
     data_np = np.zeros((len(COMIDs), len(river_graph_ids)))
-    for i, basin_id in enumerate(tqdm(COMIDs, desc="Processing River flowlines", ncols=140, ascii=True,)):
+    for i, basin_id in enumerate(
+        tqdm(
+            COMIDs,
+            desc="Processing River flowlines",
+            ncols=140,
+            ascii=True,
+        )
+    ):
         indices = np.where(merit_basin == basin_id)[0]
 
         total_length = np.sum(river_graph_len[indices])
@@ -76,16 +93,16 @@ def create_MERIT_FLOW_TM(
     data_array = xr.DataArray(
         data=data_np,
         dims=["COMID", "EDGEID"],  # Explicitly naming the dimensions
-        coords={"COMID": COMIDs, "EDGEID": river_graph_ids}  # Adding coordinates
+        coords={"COMID": COMIDs, "EDGEID": river_graph_ids},  # Adding coordinates
     )
     xr_dataset = xr.Dataset(
         data_vars={"TM": data_array},
-        attrs={"description": "MERIT -> Edge Transition Matrix"}
+        attrs={"description": "MERIT -> Edge Transition Matrix"},
     )
-    log.info(f"Writing MERIT TM to zarr store")
+    log.info("Writing MERIT TM to zarr store")
     zarr_path = Path(cfg.create_TMs.MERIT.TM)
-    xr_dataset.to_zarr(zarr_path, mode='w')
-    zarr_hierarchy = zarr.open_group(Path(cfg.create_TMs.MERIT.TM), mode='r')
+    xr_dataset.to_zarr(zarr_path, mode="w")
+    # zarr_hierarchy = zarr.open_group(Path(cfg.create_TMs.MERIT.TM), mode="r")
 
 
 def join_geospatial_data(cfg: DictConfig) -> gpd.GeoDataFrame:
@@ -101,9 +118,14 @@ def join_geospatial_data(cfg: DictConfig) -> gpd.GeoDataFrame:
     """
     huc10_gdf = gpd.read_file(Path(cfg.create_TMs.HUC.shp_files)).to_crs(epsg=4326)
     basins_gdf = gpd.read_file(Path(cfg.create_TMs.MERIT.shp_files))
-    basins_gdf['centroid'] = basins_gdf.geometry.centroid
-    joined_gdf = gpd.sjoin(basins_gdf.set_geometry('centroid'), huc10_gdf, how='left', predicate='intersects')
-    joined_gdf.set_geometry('geometry', inplace=True)
+    basins_gdf["centroid"] = basins_gdf.geometry.centroid
+    joined_gdf = gpd.sjoin(
+        basins_gdf.set_geometry("centroid"),
+        huc10_gdf,
+        how="left",
+        predicate="intersects",
+    )
+    joined_gdf.set_geometry("geometry", inplace=True)
     return joined_gdf
 
 
@@ -121,17 +143,40 @@ def plot_histogram(df: pd.DataFrame, num_bins: int = 100) -> None:
     series = df.sum(axis=1)
     plt.figure(figsize=(10, 6))
     series.hist(bins=num_bins)
-    plt.xlabel(r'Ratio of  $\sum$ MERIT basin area to HUC10 basin areas')
-    plt.ylabel('Number of HUC10s')
-    plt.title(r'Distribution of $\sum$ MERIT area / HUC10 basin area')
+    plt.xlabel(r"Ratio of  $\sum$ MERIT basin area to HUC10 basin areas")
+    plt.ylabel("Number of HUC10s")
+    plt.title(r"Distribution of $\sum$ MERIT area / HUC10 basin area")
     min_val = series.min()
     median_val = series.median()
     mean_val = series.mean()
     max_val = series.max()
-    plt.axvline(min_val, color='grey', linestyle='dashed', linewidth=2, label=f'Min: {min_val:.3f}')
-    plt.axvline(median_val, color='blue', linestyle='dashed', linewidth=2, label=f'Median: {median_val:.3f}')
-    plt.axvline(mean_val, color='red', linestyle='dashed', linewidth=2, label=f'Mean: {mean_val:.3f}')
-    plt.axvline(max_val, color='green', linestyle='dashed', linewidth=2, label=f'Max: {max_val:.3f}')
+    plt.axvline(
+        min_val,
+        color="grey",
+        linestyle="dashed",
+        linewidth=2,
+        label=f"Min: {min_val:.3f}",
+    )
+    plt.axvline(
+        median_val,
+        color="blue",
+        linestyle="dashed",
+        linewidth=2,
+        label=f"Median: {median_val:.3f}",
+    )
+    plt.axvline(
+        mean_val,
+        color="red",
+        linestyle="dashed",
+        linewidth=2,
+        label=f"Mean: {mean_val:.3f}",
+    )
+    plt.axvline(
+        max_val,
+        color="green",
+        linestyle="dashed",
+        linewidth=2,
+        label=f"Max: {max_val:.3f}",
+    )
     plt.legend()
     plt.show()
-

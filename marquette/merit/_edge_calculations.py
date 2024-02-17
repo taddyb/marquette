@@ -187,9 +187,9 @@ def string_to_dict_builder(input_str, crs_info):
 
     for key, value in matches:
         key = key.strip()
-        if key == 'crs':
+        if key == "crs":
             result_dict[key] = crs_info
-        elif key == 'coords':
+        elif key == "coords":
             result_dict[key] = value.strip().strip("'")
         else:
             result_dict[key] = handle_list(value)
@@ -197,7 +197,13 @@ def string_to_dict_builder(input_str, crs_info):
     return result_dict
 
 
-def create_segment_dict(row: pd.Series, segment_coords: List[Tuple[float, float]], crs: Any, dx: int, buffer: float) -> Dict[str, Any]:
+def create_segment_dict(
+    row: pd.Series,
+    segment_coords: List[Tuple[float, float]],
+    crs: Any,
+    dx: int,
+    buffer: float,
+) -> Dict[str, Any]:
     """
     Create a dictionary representation of a segment with various attributes.
 
@@ -224,19 +230,21 @@ def create_segment_dict(row: pd.Series, segment_coords: List[Tuple[float, float]
         Dictionary containing segment attributes.
     """
     segment_dict = {
-        'id': row["COMID"],
-        'order': row["order"],
-        'len': row["lengthkm"] * 1000,  # to meters
-        'len_dir': row["lengthdir"] * 1000,  # to meters
-        'ds': row["NextDownID"],
+        "id": row["COMID"],
+        "order": row["order"],
+        "len": row["lengthkm"] * 1000,  # to meters
+        "len_dir": row["lengthdir"] * 1000,  # to meters
+        "ds": row["NextDownID"],
         # 'is_headwater': False,
-        'up': [row[key] for key in ["up1", "up2", "up3", "up4"] if row[key] != 0] if row["maxup"] > 0 else ([] if row["order"] == 1 else []),
-        'slope': row["slope"],
-        'sinuosity': row["sinuosity"],
-        'stream_drop': row["strmDrop_t"],
-        'uparea': row["uparea"],
-        'coords': segment_coords,
-        'crs': crs,
+        "up": [row[key] for key in ["up1", "up2", "up3", "up4"] if row[key] != 0]
+        if row["maxup"] > 0
+        else ([] if row["order"] == 1 else []),
+        "slope": row["slope"],
+        "sinuosity": row["sinuosity"],
+        "stream_drop": row["strmDrop_t"],
+        "uparea": row["uparea"],
+        "coords": segment_coords,
+        "crs": crs,
     }
 
     return segment_dict
@@ -298,12 +306,15 @@ def find_flowlines(cfg: DictConfig) -> Path:
     try:
         found_file = [file for file in matching_file][0]
         return found_file
-    except IndexError as e:
+    except IndexError:
         raise IndexError(f"No flowlines found using: *{region_id}*.shp")
 
 
 def many_segment_to_edge_partition(
-    df: pd.DataFrame, edge_info: Dict[str, Any], num_edge_dict: Dict[str, Any], segment_das: Dict[str, float]
+    df: pd.DataFrame,
+    edge_info: Dict[str, Any],
+    num_edge_dict: Dict[str, Any],
+    segment_das: Dict[str, float],
 ) -> pd.DataFrame:
     """
     Process a DataFrame partition to create edges for segments with multiple edges.
@@ -328,7 +339,13 @@ def many_segment_to_edge_partition(
         DataFrame containing edge data for all segments in the partition.
     """
     all_edges = []
-    for _, segment in tqdm(df.iterrows(), total=len(df), desc="Processing Segments", ncols=140, ascii=True,):
+    for _, segment in tqdm(
+        df.iterrows(),
+        total=len(df),
+        desc="Processing Segments",
+        ncols=140,
+        ascii=True,
+    ):
         all_segment_edges = []
         num_edges, edge_len = edge_info[segment["id"]]
         up_ids = get_upstream_ids(segment, num_edge_dict)
@@ -361,7 +378,10 @@ def many_segment_to_edge_partition(
 
 
 def singular_segment_to_edge_partition(
-    df: pd.DataFrame, edge_info: Dict[str, Any], num_edge_dict: Dict[str, Any], segment_das: Dict[str, float]
+    df: pd.DataFrame,
+    edge_info: Dict[str, Any],
+    num_edge_dict: Dict[str, Any],
+    segment_das: Dict[str, float],
 ) -> pd.DataFrame:
     """
     Process a DataFrame partition to create edges for each segment.
@@ -385,12 +405,19 @@ def singular_segment_to_edge_partition(
         DataFrame containing edge data for all segments in the partition.
     """
     all_edges = []
-    num_edges = 1
-    for _, segment in tqdm(df.iterrows(), total=len(df), ncols=140, ascii=True,):
+    for _, segment in tqdm(
+        df.iterrows(),
+        total=len(df),
+        ncols=140,
+        ascii=True,
+    ):
         __, edge_len = edge_info[segment["id"]]
         up_ids = get_upstream_ids(segment, num_edge_dict)
         edge = create_edge_json(
-            segment, up=up_ids, ds=f"{segment['ds']}_0", edge_id=f"{segment['id']}_0",
+            segment,
+            up=up_ids,
+            ds=f"{segment['ds']}_0",
+            edge_id=f"{segment['id']}_0",
         )
         edge["len"] = edge_len
         edge["len_dir"] = edge_len / segment["sinuosity"]
@@ -440,7 +467,11 @@ def sort_based_on_keys(array_to_sort, keys, segment_sorted_index):
     A sorted version of 'array_to_sort'.
     """
     sorted_array = []
-    for key in tqdm(keys, ncols=140, ascii=True,):
+    for key in tqdm(
+        keys,
+        ncols=140,
+        ascii=True,
+    ):
         matching_indices = np.where(segment_sorted_index == key)[0]
         if len(matching_indices) > 1:
             sorted_indices = np.sort(matching_indices)

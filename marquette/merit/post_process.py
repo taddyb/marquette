@@ -1,9 +1,7 @@
 import logging
 from pathlib import Path
-import time
 
 import gzip
-import hydra
 from omegaconf import DictConfig
 import pandas as pd
 from tqdm import tqdm
@@ -30,7 +28,10 @@ def post_process(cfg: DictConfig) -> None:
     file_paths.sort()
 
     for i in tqdm(
-        range(0, len(file_paths) - 1), desc=f"interpolating missing {cfg.basin} data", ncols=140, ascii=True,
+        range(0, len(file_paths) - 1),
+        desc=f"interpolating missing {cfg.basin} data",
+        ncols=140,
+        ascii=True,
     ):
         try:
             _process_files(file_paths[i], file_paths[i + 1])
@@ -46,7 +47,9 @@ def _fix_date_format(date_str):
 
 def _process_files(file1, file2):
     df1 = pd.read_csv(file1, compression="gzip")
-    if df1.shape[0] != 8760:  # if it passes, no post-processing needed as all of the year of data is there
+    if (
+        df1.shape[0] != 8760
+    ):  # if it passes, no post-processing needed as all of the year of data is there
         df2 = pd.read_csv(file2, compression="gzip", nrows=1)
         df_combined = pd.concat([df1, df2], ignore_index=True)
 

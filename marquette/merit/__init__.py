@@ -23,6 +23,7 @@ def _plot_gdf(gdf: gpd.GeoDataFrame) -> None:
     None
     """
     import matplotlib.pyplot as plt
+
     fig, ax = plt.subplots(figsize=(10, 10))
     gdf.plot(ax=ax)
     ax.set_title("Polyline Plot")

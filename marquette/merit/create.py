@@ -1,9 +1,6 @@
-from collections import defaultdict
 import logging
 from pathlib import Path
-
 import dask.dataframe as dd
-import fiona
 import geopandas as gpd
 import numpy as np
 from omegaconf import DictConfig
@@ -12,15 +9,12 @@ from tqdm import tqdm
 import xarray as xr
 import zarr
 
-log = logging.getLogger(__name__)
-
 from marquette.merit._edge_calculations import (
     calculate_num_edges,
     create_segment,
     find_flowlines,
     many_segment_to_edge_partition,
     singular_segment_to_edge_partition,
-    string_to_dict_builder,
     sort_xarray_dataarray,
 )
 
@@ -36,9 +30,12 @@ from marquette.merit._TM_calculations import (
     join_geospatial_data,
 )
 from marquette.merit._streamflow_conversion_functions import (
-    calculate_from_individual_files,
+    calculate_huc10_flow_from_individual_files,
+    calculate_merit_flow,
     separate_basins,
 )
+
+log = logging.getLogger(__name__)
 
 
 def write_streamflow(cfg: DictConfig) -> None:
@@ -47,14 +44,17 @@ def write_streamflow(cfg: DictConfig) -> None:
     """
     streamflow_path = Path(cfg.create_streamflow.data_store)
     version = cfg.create_streamflow.version.lower()
-    split_output = ["dpl_v1", "dpl_v2", "dpl_v2.5", "dpl_v3-pre"]
     if streamflow_path.exists() is False:
-        if (version in split_output):
+        if version in ["dpl_v1", "dpl_v2", "dpl_v2.5", "dpl_v3-pre"]:
             """Expecting to read from individual files"""
-            streamflow_files_path = separate_basins(cfg)
+            separate_basins(cfg)
+            calculate_huc10_flow_from_individual_files(cfg)
+        elif version == "dpl_v3":
+            calculate_huc10_flow_from_individual_files(cfg)
+        elif "merit_global" in version:
+            calculate_merit_flow(cfg)
         else:
-            streamflow_files_path = Path(cfg.save_paths.streamflow_files)
-        calculate_from_individual_files(cfg, streamflow_files_path)
+            raise KeyError(f"streamflow version: {version}" "not supported")
     else:
         log.info("Streamflow data already exists")
 
@@ -94,20 +94,29 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
         num_edges_dict = {
             _segment["id"]: calculate_num_edges(_segment["len"], dx, buffer)
             for _, _segment in tqdm(
-                segments_dict.items(), desc="Processing Number of Edges", ncols=140, ascii=True,
+                segments_dict.items(),
+                desc="Processing Number of Edges",
+                ncols=140,
+                ascii=True,
             )
         }
         one_edge_segment = {
             seg_id: edge_info
             for seg_id, edge_info in tqdm(
-                num_edges_dict.items(), desc="Filtering Segments == 1", ncols=140, ascii=True,
+                num_edges_dict.items(),
+                desc="Filtering Segments == 1",
+                ncols=140,
+                ascii=True,
             )
             if edge_info[0] == 1
         }
         many_edge_segment = {
             seg_id: edge_info
             for seg_id, edge_info in tqdm(
-                num_edges_dict.items(), desc="Filtering Segments > 1", ncols=140, ascii=True,
+                num_edges_dict.items(),
+                desc="Filtering Segments > 1",
+                ncols=140,
+                ascii=True,
             )
             if edge_info[0] > 1
         }
@@ -221,12 +230,12 @@ def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
         if huc_to_merit_path.exists():
             log.info("HUC -> MERIT data already exists in zarr format")
         else:
-            log.info(f"Creating HUC10 -> MERIT TM")
+            log.info("Creating HUC10 -> MERIT TM")
             overlayed_merit_basins = join_geospatial_data(cfg)
             create_HUC_MERIT_TM(cfg, edges, overlayed_merit_basins)
     merit_to_river_graph_path = Path(cfg.create_TMs.MERIT.TM)
     if merit_to_river_graph_path.exists():
         log.info("MERIT -> FLOWLINE data already exists in zarr format")
     else:
-        log.info(f"Creating MERIT -> FLOWLINE TM")
+        log.info("Creating MERIT -> FLOWLINE TM")
         create_MERIT_FLOW_TM(cfg, edges)

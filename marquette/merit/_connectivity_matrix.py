@@ -1,10 +1,8 @@
 import ast
-from collections import defaultdict
 import logging
 from pathlib import Path
 from typing import List, Tuple, Any
 
-import dask.bag as db
 import dask.dataframe as dd
 from dask.diagnostics import ProgressBar
 import geopandas as gpd
@@ -12,11 +10,11 @@ import numpy as np
 from omegaconf import DictConfig
 import pandas as pd
 from tqdm import tqdm
-import xarray as xr
 import zarr
 
 
 log = logging.getLogger(__name__)
+
 
 def format_pairs(gage_output: dict):
     pairs = []
@@ -149,7 +147,9 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         try:
             gage_ids = gage_locations_df["id"].astype(str).apply(lambda x: x.zfill(8))
         except KeyError:
-            gage_ids = gage_locations_df["STAT_ID"].astype(str).apply(lambda x: x.zfill(8))
+            gage_ids = (
+                gage_locations_df["STAT_ID"].astype(str).apply(lambda x: x.zfill(8))
+            )
         gdf = gdf[gdf["STAID"].isin(gage_ids)]
     gdf["COMID"] = gdf["COMID"].astype(int)
     filtered_gdf = filter_by_comid_prefix(gdf, cfg.zone)
@@ -363,7 +363,12 @@ def new_zone_connectivity(
               'up' - a list of lists, where each sublist contains indices of upstream nodes.
         """
         river_graph = {"ds": [], "up": []}
-        for idx in tqdm(range(edges.id.shape[0]), desc="Looping through edges", ascii=True, ncols=140):
+        for idx in tqdm(
+            range(edges.id.shape[0]),
+            desc="Looping through edges",
+            ascii=True,
+            ncols=140,
+        ):
             river_graph["ds"].append(idx)
 
             # Decode upstream ids and convert to indices
