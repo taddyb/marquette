@@ -2,7 +2,7 @@
 <module type="PYTHON_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$" />
-    <orderEntry type="jdk" jdkName="marquette_env" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Remote Python 3.10.9 (sftp://tkb5476@suntzu.cee.psu.edu:22/data/tkb5476/projects/marquette/.venv/bin/python3.10) (2)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

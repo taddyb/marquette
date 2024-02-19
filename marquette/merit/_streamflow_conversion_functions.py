@@ -124,6 +124,7 @@ def calculate_merit_flow(cfg: DictConfig) -> None:
     streamflow_predictions_root = zarr.open(
         Path(cfg.create_streamflow.predictions), mode="r"
     )
+    log.info("Reading Zarr Store")
     runoff = streamflow_predictions_root.Runoff[:]
 
     log.info("Creating areas areas_array")
@@ -139,8 +140,9 @@ def calculate_merit_flow(cfg: DictConfig) -> None:
 
     log.info("Converting runoff data")
     streamflow_m3_s_data = runoff * areas_array
-    mask = np.any(np.isnan(runoff), axis=0)
-    streamflow_m3_s_data[:, mask] = 0.0
+    streamflow_m3_s_data = np.nan_to_num(
+        streamflow_m3_s_data, nan=1e-6, posinf=1e-6, neginf=1e-6
+    )
 
     date_range = pd.date_range(
         start=cfg.create_streamflow.start_date,

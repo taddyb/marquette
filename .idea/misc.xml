@@ -3,7 +3,7 @@
   <component name="Black">
     <option name="sdkName" value="$USER_HOME$/mambaforge/envs/marquette" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="marquette_env" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Remote Python 3.10.9 (sftp://tkb5476@suntzu.cee.psu.edu:22/data/tkb5476/projects/marquette/.venv/bin/python3.10) (2)" project-jdk-type="Python SDK" />
   <component name="PyCharmProfessionalAdvertiser">
     <option name="shown" value="true" />
   </component>
