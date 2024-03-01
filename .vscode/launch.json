@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Run as Module",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "marquette.__main__",
+            "console": "integratedTerminal",
+            "cwd": "/projects/mhpi/tbindas/marquette"
+        },
+        
+    ],
+}

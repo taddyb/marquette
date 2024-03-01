@@ -125,17 +125,20 @@ def calculate_merit_flow(cfg: DictConfig) -> None:
         Path(cfg.create_streamflow.predictions), mode="r"
     )
     log.info("Reading Zarr Store")
-    runoff = streamflow_predictions_root.Runoff[:]
+    runoff = np.transpose(streamflow_predictions_root.Qr[:])
+    # runoff = streamflow_predictions_root.Runoff[:]
 
     log.info("Creating areas areas_array")
-    comids = streamflow_predictions_root.rivid[:]
+    comids = streamflow_predictions_root.COMID[:]
+    # comids = streamflow_predictions_root.rivid[:]
     areas = np.zeros_like(comids, dtype=np.float64)
     for idx, comid in enumerate(comids):
         try:
             areas[idx] = id_to_area[comid]
         except KeyError as e:
-            log.error(f"problem finding {comid} in Areas Dictionary")
-            raise e
+            msg = f"problem finding {comid} in Areas Dictionary"
+            log.exception(msg=msg)
+            raise KeyError(msg)
     areas_array = areas * 1000 / 86400
 
     log.info("Converting runoff data")
