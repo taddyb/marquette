@@ -12,8 +12,8 @@ create_N:
   filter_based_on_dataset: True
   gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gage_9322_intersection.shp
   gage_coo_indices: ${data_path}/zarr/gage_coo_indices
-  pad_gage_id: True
-  obs_dataset: ${data_path}/gage_information/obs_csvs/gages3000Info.csv
+  pad_gage_id: False
+  obs_dataset:
   obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_merit_info.csv
   zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}.csv
 create_TMs:
@@ -24,7 +24,7 @@ create_TMs:
     TM: ${data_path}/zarr/TMs/MERIT_FLOWLINES_${zone}
     shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
 create_streamflow:
-  version: merit_global_v2.0
+  version: merit_global_v1.1
   data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}/${zone}
 #  obs_attributes: ${data_path}/streamflow/attributes_${create_streamflow.version}.csv
   obs_attributes: /data/hjj5218/source_data/csv_file/sorted_info
