@@ -224,9 +224,9 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
 
 def create_gage_connectivity(
     cfg: DictConfig,
-    edges: zarr.hierarchy.Group,
-    gage_coo_root: zarr.hierarchy.Group,
-    zone_csv: gpd.GeoDataFrame,
+    edges: zarr.Group,
+    gage_coo_root: zarr.Group,
+    zone_csv: pd.DataFrame | gpd.GeoDataFrame,
 ) -> None:
     def stack_traversal(gage_id: str, id_: str, idx: int, merit_flowlines: zarr.Group):
         """
@@ -317,7 +317,7 @@ def create_gage_connectivity(
         if _pad_gage_id:
             _gage_id = str(row["STAID"]).zfill(8)
         else:
-            _gage_id = str(row["STAID"])
+            _gage_id = str(object=row["STAID"])
         edge_id = row["edge_intersection"]
         zone_edge_id = row["zone_edge_id"]
         if _gage_id not in coo_root:
@@ -343,10 +343,10 @@ def create_gage_connectivity(
 
 def new_zone_connectivity(
     cfg: DictConfig,
-    edges: zarr.hierarchy.Group,
-    full_zone_root: zarr.hierarchy.Group,
+    edges: zarr.Group,
+    full_zone_root: zarr.Group,
 ) -> None:
-    def find_connection(edges: np.ndarray, mapping: dict) -> dict:
+    def find_connection(edges: zarr.Group, mapping: dict) -> dict:
         """
         Performs a traversal on a graph of river flowlines, represented by a NumPy array of edges.
         This function iterates over each edge and explores its upstream connections, constructing a graph structure.
@@ -373,8 +373,11 @@ def new_zone_connectivity(
 
             # Decode upstream ids and convert to indices
             upstream_ids = ast.literal_eval(edges.up[idx])
-            upstream_indices = [mapping.get(up_id, None) for up_id in upstream_ids]
-            river_graph["up"].append(upstream_indices)
+            if len(upstream_ids) == 0:
+                river_graph["up"].append([None])
+            else:
+                upstream_indices = [mapping.get(up_id, None) for up_id in upstream_ids]
+                river_graph["up"].append(upstream_indices)
         return river_graph
 
     mapping = {id_: i for i, id_ in enumerate(edges.id[:])}
@@ -392,5 +395,5 @@ def new_zone_connectivity(
     pairs = format_pairs(river_graph)
 
     full_zone_root.create_dataset(
-        "pairs", data=np.array(pairs), chunks=(5000,), dtype="float32"
+        "pairs", data=np.array(pairs), chunks=(5000,5000), dtype="float32"
     )

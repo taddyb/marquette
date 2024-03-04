@@ -9,7 +9,7 @@ log = logging.getLogger(__name__)
 
 
 @hydra.main(
-    version_base="1.2",
+    version_base="1.3",
     config_path="conf/",
     config_name="config",
 )

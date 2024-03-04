@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 import dask.dataframe as dd
+from dask.dataframe.io.io import from_pandas
 import geopandas as gpd
 import numpy as np
 from omegaconf import DictConfig
@@ -51,7 +52,7 @@ def write_streamflow(cfg: DictConfig) -> None:
             calculate_huc10_flow_from_individual_files(cfg)
         elif version == "dpl_v3":
             calculate_huc10_flow_from_individual_files(cfg)
-        elif "merit_global" in version:
+        elif "merit" in version:
             calculate_merit_flow(cfg)
         else:
             raise KeyError(f"streamflow version: {version}" "not supported")
@@ -59,7 +60,7 @@ def write_streamflow(cfg: DictConfig) -> None:
         log.info("Streamflow data already exists")
 
 
-def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
+def create_edges(cfg: DictConfig) -> zarr.Group:
     root = zarr.open_group(Path(cfg.create_edges.edges), mode="a")
     group_name = f"{cfg.zone}"
     if group_name in root:
@@ -137,8 +138,8 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
         df_many = pd.DataFrame.from_dict(
             segments_with_more_than_one_edge, orient="index"
         )
-        ddf_one = dd.from_pandas(df_one, npartitions=64)
-        ddf_many = dd.from_pandas(df_many, npartitions=64)
+        ddf_one = from_pandas(df_one, npartitions=64)
+        ddf_many = from_pandas(df_many, npartitions=64)
 
         meta = pd.DataFrame(
             {
@@ -203,7 +204,7 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
     return edges
 
 
-def create_N(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
+def create_N(cfg: DictConfig, edges: zarr.Group) -> None:
     gage_coo_root = zarr.open_group(Path(cfg.create_N.gage_coo_indices), mode="a")
     zone_root = gage_coo_root.require_group(cfg.zone)
     if cfg.create_N.run_whole_zone:
@@ -224,7 +225,7 @@ def create_N(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
             log.info("All sparse gage matrices are created")
 
 
-def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
+def create_TMs(cfg: DictConfig, edges: zarr.Group) -> None:
     if "HUC" in cfg.create_TMs:
         huc_to_merit_path = Path(cfg.create_TMs.HUC.TM)
         if huc_to_merit_path.exists():

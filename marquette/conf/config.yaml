@@ -1,6 +1,6 @@
 name: MERIT
 data_path: /projects/mhpi/data/${name}
-zone: 76
+zone: 74
 create_edges:
   buffer: 0.3334
   dx: 2000
@@ -12,8 +12,8 @@ create_N:
   filter_based_on_dataset: True
   gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gage_9322_intersection.shp
   gage_coo_indices: ${data_path}/zarr/gage_coo_indices
-  pad_gage_id: False
-  obs_dataset:
+  pad_gage_id: True
+  obs_dataset: ${data_path}/gage_information/obs_csvs/gages3000Info.csv
   obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_merit_info.csv
   zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}.csv
 create_TMs:
@@ -24,7 +24,7 @@ create_TMs:
     TM: ${data_path}/zarr/TMs/MERIT_FLOWLINES_${zone}
     shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
 create_streamflow:
-  version: merit_global_v1.2
+  version: merit_conus_v1.0
   data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}/${zone}
   obs_attributes: ${data_path}/gage_information/MERIT_basin_area_info
   predictions: /projects/mhpi/hjj5218/model_output/dpl_hbv_static/conus_merit/zarr_format/${zone}

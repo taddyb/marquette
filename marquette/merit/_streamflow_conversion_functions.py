@@ -8,7 +8,6 @@ from tqdm import tqdm, trange
 import xarray as xr
 import zarr
 
-
 log = logging.getLogger(__name__)
 
 
@@ -125,24 +124,27 @@ def calculate_merit_flow(cfg: DictConfig) -> None:
         Path(cfg.create_streamflow.predictions), mode="r"
     )
     log.info("Reading Zarr Store")
-    runoff = np.transpose(streamflow_predictions_root.Qr[:])
+    file_runoff = np.transpose(streamflow_predictions_root.Qr[:])
     # runoff = streamflow_predictions_root.Runoff[:]
 
     log.info("Creating areas areas_array")
-    comids = streamflow_predictions_root.COMID[:]
+    comids: np.ndarray = streamflow_predictions_root.COMID[:]
+    sorted_indices = np.argsort(comids)
+    sorted_runoff = file_runoff[:, sorted_indices]
+    sorted_comids = comids[sorted_indices]
+    
     # comids = streamflow_predictions_root.rivid[:]
-    areas = np.zeros_like(comids, dtype=np.float64)
-    for idx, comid in enumerate(comids):
+    areas = np.zeros_like(sorted_comids, dtype=np.float64)
+    for idx, comid in enumerate(sorted_comids):
         try:
             areas[idx] = id_to_area[comid]
         except KeyError as e:
-            msg = f"problem finding {comid} in Areas Dictionary"
-            log.exception(msg=msg)
-            raise KeyError(msg)
+            log.error(f"problem finding {comid} in Areas Dictionary")
+            raise e
     areas_array = areas * 1000 / 86400
 
     log.info("Converting runoff data")
-    streamflow_m3_s_data = runoff * areas_array
+    streamflow_m3_s_data = sorted_runoff * areas_array
     streamflow_m3_s_data = np.nan_to_num(
         streamflow_m3_s_data, nan=1e-6, posinf=1e-6, neginf=1e-6
     )
@@ -155,7 +157,7 @@ def calculate_merit_flow(cfg: DictConfig) -> None:
     data_array = xr.DataArray(
         data=streamflow_m3_s_data,
         dims=["time", "COMID"],  # Explicitly naming the dimensions
-        coords={"time": date_range, "COMID": comids},  # Adding coordinates
+        coords={"time": date_range, "COMID": sorted_comids},  # Adding coordinates
     )
     xr_dataset = xr.Dataset(
         data_vars={"streamflow": data_array},
