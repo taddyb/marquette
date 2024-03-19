@@ -34,12 +34,16 @@ def main(cfg: DictConfig) -> None:
         start = time.perf_counter()
         log.info(f"Creating MERIT {cfg.zone} River Graph")
         edges = create_edges(cfg)
+        
         log.info(f"Creating MERIT {cfg.zone} Connectivity Matrix (N) for gages")
         create_N(cfg, edges)
-        log.info(f"Mapping HUC10 {cfg.zone} Streamflow to Nodes/Edges")
-        create_TMs(cfg, edges)
+
         log.info("Converting Streamflow to zarr")
-        write_streamflow(cfg)
+        write_streamflow(cfg, edges)
+        
+        log.info(f"Mapping {cfg.zone} Streamflow to Nodes/Edges")
+        create_TMs(cfg, edges)
+        
         end = time.perf_counter()
         log.info(f"Extracting data took : {(end - start):.6f} seconds")
     else:

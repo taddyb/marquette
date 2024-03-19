@@ -114,28 +114,30 @@ def separate_basins(cfg: DictConfig) -> None:
                 np.save(data_split_folder / f"{formatted_id}.npy", qr)
 
 
-def calculate_merit_flow(cfg: DictConfig) -> None:
+def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
     attrs_df = pd.read_csv(
         Path(cfg.create_streamflow.obs_attributes) / f"COMID_{str(cfg.zone)[0]}.csv"
     )
     id_to_area = attrs_df.set_index("COMID")["unitarea"].to_dict()
+    
+    edge_comids = np.unique(edges.merit_basin[:])  # already sorted
 
     streamflow_predictions_root = zarr.open(
         Path(cfg.create_streamflow.predictions), mode="r"
     )
     log.info("Reading Zarr Store")
-    file_runoff = np.transpose(streamflow_predictions_root.Qr[:])
-    # runoff = streamflow_predictions_root.Runoff[:]
+    file_runoff = np.transpose(streamflow_predictions_root.Runoff)
 
-    log.info("Creating areas areas_array")
-    comids: np.ndarray = streamflow_predictions_root.COMID[:]
-    sorted_indices = np.argsort(comids)
-    sorted_runoff = file_runoff[:, sorted_indices]
-    sorted_comids = comids[sorted_indices]
+    streamflow_comids: np.ndarray = streamflow_predictions_root.COMID[:].astype(int)
     
-    # comids = streamflow_predictions_root.rivid[:]
-    areas = np.zeros_like(sorted_comids, dtype=np.float64)
-    for idx, comid in enumerate(sorted_comids):
+    log.info("Mapping predictions to zone COMIDs")
+    runoff_full_zone = np.zeros((file_runoff.shape[0], edge_comids.shape[0]))
+    indices = np.searchsorted(edge_comids, streamflow_comids)
+    runoff_full_zone[:, indices] = file_runoff
+    
+    log.info("Creating areas areas_array")
+    areas = np.zeros_like(edge_comids, dtype=np.float64)
+    for idx, comid in enumerate(edge_comids):
         try:
             areas[idx] = id_to_area[comid]
         except KeyError as e:
@@ -143,11 +145,13 @@ def calculate_merit_flow(cfg: DictConfig) -> None:
             raise e
     areas_array = areas * 1000 / 86400
 
-    log.info("Converting runoff data")
-    streamflow_m3_s_data = sorted_runoff * areas_array
+    log.info("Converting runoff data, setting NaN and 0 to 1e-6")
+    streamflow_m3_s_data = runoff_full_zone * areas_array
     streamflow_m3_s_data = np.nan_to_num(
         streamflow_m3_s_data, nan=1e-6, posinf=1e-6, neginf=1e-6
     )
+    mask =  (streamflow_m3_s_data == 0)
+    streamflow_m3_s_data[mask] = 1e-6
 
     date_range = pd.date_range(
         start=cfg.create_streamflow.start_date,
@@ -157,7 +161,7 @@ def calculate_merit_flow(cfg: DictConfig) -> None:
     data_array = xr.DataArray(
         data=streamflow_m3_s_data,
         dims=["time", "COMID"],  # Explicitly naming the dimensions
-        coords={"time": date_range, "COMID": sorted_comids},  # Adding coordinates
+        coords={"time": date_range, "COMID": edge_comids},  # Adding coordinates
     )
     xr_dataset = xr.Dataset(
         data_vars={"streamflow": data_array},

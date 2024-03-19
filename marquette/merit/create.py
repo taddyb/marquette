@@ -39,7 +39,7 @@ from marquette.merit._streamflow_conversion_functions import (
 log = logging.getLogger(__name__)
 
 
-def write_streamflow(cfg: DictConfig) -> None:
+def write_streamflow(cfg: DictConfig, edges: zarr.Group) -> None:
     """
     Process and write streamflow data to a Zarr store.
     """
@@ -53,7 +53,7 @@ def write_streamflow(cfg: DictConfig) -> None:
         elif version == "dpl_v3":
             calculate_huc10_flow_from_individual_files(cfg)
         elif "merit" in version:
-            calculate_merit_flow(cfg)
+            calculate_merit_flow(cfg, edges)
         else:
             raise KeyError(f"streamflow version: {version}" "not supported")
     else:
