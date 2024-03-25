@@ -97,7 +97,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         zone_edge_ids: np.ndarray,
         zone_merit_basin_ids: np.ndarray,
         zone_upstream_areas: np.ndarray,
-    ) -> Tuple[np.float64, int, np.float64, np.float64, np.float64]:
+    ):
         """
         Finds details of the edge with the upstream area closest to the DRAIN_SQKM value in absolute terms
         and calculates the percent error between DRAIN_SQKM and the matched zone_edge_uparea.
@@ -123,6 +123,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
                 np.nan,
                 np.nan,
                 np.nan,
+                np.nan,
             )  # Return NaNs if no matching edges are found
 
         matching_upstream_areas = zone_upstream_areas[matching_indices]
@@ -131,6 +132,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         percent_error = (
             (differences[min_diff_idx] / DRAIN_SQKM) if DRAIN_SQKM != 0 else np.nan
         )
+        ratio = np.abs(matching_upstream_areas / DRAIN_SQKM)
 
         return (
             zone_edge_ids[matching_indices[min_diff_idx]],
@@ -138,6 +140,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
             matching_upstream_areas[min_diff_idx],
             differences[min_diff_idx],
             percent_error,
+            ratio,
         )
 
     gdf = gpd.read_file(Path(cfg.create_N.gage_buffered_flowline_intersections))
@@ -173,6 +176,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
     unique_gdf["zone_edge_uparea"] = edge_info[2]
     unique_gdf["zone_edge_vs_gage_area_difference"] = edge_info[3]
     unique_gdf["drainage_area_percent_error"] = edge_info[4]
+    unique_gdf["a_merit_a_usgs_ratio"] = edge_info[5]
 
     result_df = unique_gdf[
         unique_gdf["drainage_area_percent_error"] <= cfg.create_N.drainage_area_treshold
@@ -199,6 +203,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         "zone_edge_uparea",
         "zone_edge_vs_gage_area_difference",
         "drainage_area_percent_error",
+        "a_merit_a_usgs_ratio"
     ]
     result = result_df[columns]
     result = result.dropna()

@@ -26,7 +26,7 @@ create_TMs:
     shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
 create_streamflow:
   version: merit_conus_v1.1
-  data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}/${zone}
+  data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}.1/${zone}
   obs_attributes: ${data_path}/gage_information/MERIT_basin_area_info
   predictions: /projects/mhpi/hjj5218/model_output/conus_zarr/${zone}
   start_date: 01-01-1980
