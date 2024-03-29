@@ -62,8 +62,6 @@ def spatial_nan_filter(attribute: str, attr_values: np.ndarray, mapping: np.ndar
         return _attr_mapped
         
         
-
-
 def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
     soils_data_path = Path(cfg.data_path) / f"extensions/soils_data/{cfg.zone}"
     if soils_data_path.exists():
