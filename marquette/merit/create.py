@@ -1,44 +1,33 @@
 import logging
 from pathlib import Path
-import dask.dataframe as dd
+
 import geopandas as gpd
 import numpy as np
-from omegaconf import DictConfig
 import pandas as pd
-from tqdm import tqdm
 import xarray as xr
 import zarr
+from dask.dataframe.io.io import from_pandas
+from omegaconf import DictConfig
+from tqdm import tqdm
 
+from marquette.merit._connectivity_matrix import (create_gage_connectivity,
+                                                  map_gages_to_zone,
+                                                  new_zone_connectivity)
 from marquette.merit._edge_calculations import (
-    calculate_num_edges,
-    create_segment,
-    find_flowlines,
-    many_segment_to_edge_partition,
-    singular_segment_to_edge_partition,
-    sort_xarray_dataarray,
-)
-
-from marquette.merit._connectivity_matrix import (
-    create_gage_connectivity,
-    map_gages_to_zone,
-    new_zone_connectivity,
-)
-
-from marquette.merit._TM_calculations import (
-    create_HUC_MERIT_TM,
-    create_MERIT_FLOW_TM,
-    join_geospatial_data,
-)
+    calculate_num_edges, create_segment, find_flowlines,
+    many_segment_to_edge_partition, singular_segment_to_edge_partition,
+    sort_xarray_dataarray)
 from marquette.merit._streamflow_conversion_functions import (
-    calculate_huc10_flow_from_individual_files,
-    calculate_merit_flow,
-    separate_basins,
-)
+    calculate_huc10_flow_from_individual_files, calculate_merit_flow,
+    separate_basins)
+from marquette.merit._TM_calculations import (create_HUC_MERIT_TM,
+                                              create_MERIT_FLOW_TM,
+                                              join_geospatial_data)
 
 log = logging.getLogger(__name__)
 
 
-def write_streamflow(cfg: DictConfig) -> None:
+def write_streamflow(cfg: DictConfig, edges: zarr.Group) -> None:
     """
     Process and write streamflow data to a Zarr store.
     """
@@ -51,15 +40,15 @@ def write_streamflow(cfg: DictConfig) -> None:
             calculate_huc10_flow_from_individual_files(cfg)
         elif version == "dpl_v3":
             calculate_huc10_flow_from_individual_files(cfg)
-        elif "merit_global" in version:
-            calculate_merit_flow(cfg)
+        elif "merit" in version:
+            calculate_merit_flow(cfg, edges)
         else:
             raise KeyError(f"streamflow version: {version}" "not supported")
     else:
         log.info("Streamflow data already exists")
 
 
-def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
+def create_edges(cfg: DictConfig) -> zarr.Group:
     root = zarr.open_group(Path(cfg.create_edges.edges), mode="a")
     group_name = f"{cfg.zone}"
     if group_name in root:
@@ -137,8 +126,8 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
         df_many = pd.DataFrame.from_dict(
             segments_with_more_than_one_edge, orient="index"
         )
-        ddf_one = dd.from_pandas(df_one, npartitions=64)
-        ddf_many = dd.from_pandas(df_many, npartitions=64)
+        ddf_one = from_pandas(df_one, npartitions=64)
+        ddf_many = from_pandas(df_many, npartitions=64)
 
         meta = pd.DataFrame(
             {
@@ -203,7 +192,7 @@ def create_edges(cfg: DictConfig) -> zarr.hierarchy.Group:
     return edges
 
 
-def create_N(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
+def create_N(cfg: DictConfig, edges: zarr.Group) -> None:
     gage_coo_root = zarr.open_group(Path(cfg.create_N.gage_coo_indices), mode="a")
     zone_root = gage_coo_root.require_group(cfg.zone)
     if cfg.create_N.run_whole_zone:
@@ -224,7 +213,7 @@ def create_N(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
             log.info("All sparse gage matrices are created")
 
 
-def create_TMs(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
+def create_TMs(cfg: DictConfig, edges: zarr.Group) -> None:
     if "HUC" in cfg.create_TMs:
         huc_to_merit_path = Path(cfg.create_TMs.HUC.TM)
         if huc_to_merit_path.exists():

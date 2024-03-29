@@ -1,9 +1,9 @@
+import gzip
 import logging
 from pathlib import Path
 
-import gzip
-from omegaconf import DictConfig
 import pandas as pd
+from omegaconf import DictConfig
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)

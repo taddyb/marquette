@@ -1,17 +1,16 @@
 import ast
 import logging
 from pathlib import Path
-from typing import List, Tuple, Any
+from typing import Any, List, Tuple
 
 import dask.dataframe as dd
-from dask.diagnostics import ProgressBar
 import geopandas as gpd
 import numpy as np
-from omegaconf import DictConfig
 import pandas as pd
-from tqdm import tqdm
 import zarr
-
+from dask.diagnostics import ProgressBar
+from omegaconf import DictConfig
+from tqdm import tqdm
 
 log = logging.getLogger(__name__)
 
@@ -97,7 +96,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         zone_edge_ids: np.ndarray,
         zone_merit_basin_ids: np.ndarray,
         zone_upstream_areas: np.ndarray,
-    ) -> Tuple[np.float64, int, np.float64, np.float64, np.float64]:
+    ):
         """
         Finds details of the edge with the upstream area closest to the DRAIN_SQKM value in absolute terms
         and calculates the percent error between DRAIN_SQKM and the matched zone_edge_uparea.
@@ -123,6 +122,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
                 np.nan,
                 np.nan,
                 np.nan,
+                np.nan,
             )  # Return NaNs if no matching edges are found
 
         matching_upstream_areas = zone_upstream_areas[matching_indices]
@@ -131,6 +131,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         percent_error = (
             (differences[min_diff_idx] / DRAIN_SQKM) if DRAIN_SQKM != 0 else np.nan
         )
+        ratio = np.abs(matching_upstream_areas / DRAIN_SQKM)
 
         return (
             zone_edge_ids[matching_indices[min_diff_idx]],
@@ -138,6 +139,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
             matching_upstream_areas[min_diff_idx],
             differences[min_diff_idx],
             percent_error,
+            ratio,
         )
 
     gdf = gpd.read_file(Path(cfg.create_N.gage_buffered_flowline_intersections))
@@ -173,6 +175,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
     unique_gdf["zone_edge_uparea"] = edge_info[2]
     unique_gdf["zone_edge_vs_gage_area_difference"] = edge_info[3]
     unique_gdf["drainage_area_percent_error"] = edge_info[4]
+    unique_gdf["a_merit_a_usgs_ratio"] = edge_info[5]
 
     result_df = unique_gdf[
         unique_gdf["drainage_area_percent_error"] <= cfg.create_N.drainage_area_treshold
@@ -199,6 +202,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         "zone_edge_uparea",
         "zone_edge_vs_gage_area_difference",
         "drainage_area_percent_error",
+        "a_merit_a_usgs_ratio",
     ]
     result = result_df[columns]
     result = result.dropna()
@@ -224,9 +228,9 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
 
 def create_gage_connectivity(
     cfg: DictConfig,
-    edges: zarr.hierarchy.Group,
-    gage_coo_root: zarr.hierarchy.Group,
-    zone_csv: gpd.GeoDataFrame,
+    edges: zarr.Group,
+    gage_coo_root: zarr.Group,
+    zone_csv: pd.DataFrame | gpd.GeoDataFrame,
 ) -> None:
     def stack_traversal(gage_id: str, id_: str, idx: int, merit_flowlines: zarr.Group):
         """
@@ -317,7 +321,7 @@ def create_gage_connectivity(
         if _pad_gage_id:
             _gage_id = str(row["STAID"]).zfill(8)
         else:
-            _gage_id = str(row["STAID"])
+            _gage_id = str(object=row["STAID"])
         edge_id = row["edge_intersection"]
         zone_edge_id = row["zone_edge_id"]
         if _gage_id not in coo_root:
@@ -343,10 +347,10 @@ def create_gage_connectivity(
 
 def new_zone_connectivity(
     cfg: DictConfig,
-    edges: zarr.hierarchy.Group,
-    full_zone_root: zarr.hierarchy.Group,
+    edges: zarr.Group,
+    full_zone_root: zarr.Group,
 ) -> None:
-    def find_connection(edges: np.ndarray, mapping: dict) -> dict:
+    def find_connection(edges: zarr.Group, mapping: dict) -> dict:
         """
         Performs a traversal on a graph of river flowlines, represented by a NumPy array of edges.
         This function iterates over each edge and explores its upstream connections, constructing a graph structure.
@@ -373,8 +377,11 @@ def new_zone_connectivity(
 
             # Decode upstream ids and convert to indices
             upstream_ids = ast.literal_eval(edges.up[idx])
-            upstream_indices = [mapping.get(up_id, None) for up_id in upstream_ids]
-            river_graph["up"].append(upstream_indices)
+            if len(upstream_ids) == 0:
+                river_graph["up"].append([None])
+            else:
+                upstream_indices = [mapping.get(up_id, None) for up_id in upstream_ids]
+                river_graph["up"].append(upstream_indices)
         return river_graph
 
     mapping = {id_: i for i, id_ in enumerate(edges.id[:])}
@@ -392,5 +399,5 @@ def new_zone_connectivity(
     pairs = format_pairs(river_graph)
 
     full_zone_root.create_dataset(
-        "pairs", data=np.array(pairs), chunks=(5000,), dtype="float32"
+        "pairs", data=np.array(pairs), chunks=(5000, 5000), dtype="float32"
     )

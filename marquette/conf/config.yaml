@@ -1,6 +1,6 @@
 name: MERIT
-data_path: /data/shared_data/${name}
-zone: 72
+data_path: /projects/mhpi/data/${name}
+zone: 73
 create_edges:
   buffer: 0.3334
   dx: 2000
@@ -12,8 +12,8 @@ create_N:
   filter_based_on_dataset: True
   gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gage_9322_intersection.shp
   gage_coo_indices: ${data_path}/zarr/gage_coo_indices
-  pad_gage_id: False
-  obs_dataset:
+  pad_gage_id: True
+  obs_dataset: ${data_path}/gage_information/obs_csvs/gages3000Info.csv
   obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_merit_info.csv
   zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}.csv
 create_TMs:
@@ -21,19 +21,20 @@ create_TMs:
 #    TM: ${data_path}/zarr/TMs/PFAF_${zone}
 #    shp_files: ${data_path}/huc_shp_files/huc_10_CONUS.shp
   MERIT:
+    save_sparse: True
     TM: ${data_path}/zarr/TMs/MERIT_FLOWLINES_${zone}
     shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
 create_streamflow:
-  version: merit_global_v1.1
+  version: merit_conus_v1.1
   data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}/${zone}
-#  obs_attributes: ${data_path}/streamflow/attributes_${create_streamflow.version}.csv
-  obs_attributes: /data/hjj5218/source_data/csv_file/sorted_info
-  predictions: /data/hjj5218/model_output/Merit_global/dPLHBV_Static/version2/zarr_format/${zone}
+  obs_attributes: ${data_path}/gage_information/MERIT_basin_area_info
+  predictions: /projects/mhpi/hjj5218/model_output/conus_zarr/${zone}
   start_date: 01-01-1980
   end_date: 12-31-2020
+extensions:
+  - soils_data
+
 # Hydra Config ------------------------------------------------------------------------#
-override hydra/hydra_logging: colorlog
-override hydra/job_logging: colorlog
 hydra:
   help:
     app_name: marquette
