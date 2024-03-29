@@ -6,17 +6,13 @@ from typing import List
 
 import geopandas as gpd
 import numpy as np
-from omegaconf import DictConfig
 import pandas as pd
+from omegaconf import DictConfig
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
-from marquette.merit._graph import (
-    data_to_csv,
-    get_edge_counts,
-    segments_to_edges,
-    Segment,
-)
+from marquette.merit._graph import (Segment, data_to_csv, get_edge_counts,
+                                    segments_to_edges)
 
 log = logging.getLogger(__name__)
 

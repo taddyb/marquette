@@ -5,9 +5,10 @@
             "name": "Python Debugger: Run as Module",
             "type": "debugpy",
             "request": "launch",
-            "module": "marquette.__main__",
+            "module": "marquette",
             "console": "integratedTerminal",
-            "cwd": "/projects/mhpi/tbindas/marquette"
+            "cwd": "/projects/mhpi/tbindas/marquette",
+            "justMyCode": false,
         },
         
     ],

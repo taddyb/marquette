@@ -1,6 +1,6 @@
 import logging
-from pathlib import Path
 import time
+from pathlib import Path
 
 import hydra
 from omegaconf import DictConfig
@@ -24,12 +24,8 @@ def main(cfg: DictConfig) -> None:
     if cfg.name.lower() == "hydrofabric":
         raise ImportError("Hydrofabric functionality not yet supported")
     elif cfg.name.lower() == "merit":
-        from marquette.merit.create import (
-            create_edges,
-            create_N,
-            create_TMs,
-            write_streamflow,
-        )
+        from marquette.merit.create import (create_edges, create_N, create_TMs,
+                                            write_streamflow)
 
         start = time.perf_counter()
         log.info(f"Creating MERIT {cfg.zone} River Graph")
@@ -43,6 +39,9 @@ def main(cfg: DictConfig) -> None:
         
         log.info(f"Mapping {cfg.zone} Streamflow to Nodes/Edges")
         create_TMs(cfg, edges)
+                
+        log.info("Running Data Post-Processing Extensions")
+        run_extensions(cfg, edges)
         
         end = time.perf_counter()
         log.info(f"Extracting data took : {(end - start):.6f} seconds")
@@ -50,20 +49,19 @@ def main(cfg: DictConfig) -> None:
         log.error(f"incorrect name specified: {cfg.name}")
 
 
-def _missing_files(cfg: DictConfig) -> bool:
-    import pandas as pd
+def run_extensions(cfg, edges):
+    """
+    The function for running post-processing data extensions
 
-    mapped_files_dir = Path(cfg.csv.mapped_streamflow_dir)
-    try:
-        file_count = sum(1 for item in mapped_files_dir.iterdir() if item.is_file())
-        start_date = pd.Timestamp(cfg.start_date)
-        end_date = pd.Timestamp(cfg.end_date)
-        num_years = (
-            end_date.year - start_date.year
-        ) + 1  # need to include the first value
-        return file_count != num_years
-    except FileNotFoundError:
-        return True  # No predictions. Return True
+    :param cfg: Configuration object.
+    :type cfg: DictConfig
+    :return: None
+    """
+    if "soils_data" in cfg.extensions:
+        from marquette.merit.extensions import soils_data
+        
+        log.info("Adding soils information to your MERIT River Graph")
+        soils_data(cfg, edges)
 
 
 if __name__ == "__main__":
