@@ -1,7 +1,6 @@
 import logging
 from pathlib import Path
 
-import dask.dataframe as dd
 import geopandas as gpd
 import numpy as np
 import pandas as pd

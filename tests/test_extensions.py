@@ -12,7 +12,6 @@ from tqdm import tqdm
 
 from marquette.merit.extensions import Direction, traverse
 from tests.fixtures import sample_gage_cfg, soils_data
-                            
 
 log = logging.getLogger(__name__)
 
@@ -20,7 +19,7 @@ log = logging.getLogger(__name__)
 def test_traverse_up(soils_data):
     # Initialize test data
     comid = 1
-    attribute = 'attribute'
+    attribute = "attribute"
     direction = Direction.up
 
     # Invoke the function under test
@@ -28,11 +27,12 @@ def test_traverse_up(soils_data):
 
     # Check the result
     assert result == 20, "Upwards traversing is broken"
-    
+
+
 def test_traverse_down(soils_data):
     # Initialize test data
     comid = 5
-    attribute = 'attribute'
+    attribute = "attribute"
     direction = Direction.down
 
     # Invoke the function under test
@@ -40,12 +40,12 @@ def test_traverse_down(soils_data):
 
     # Check the result
     assert result == 20, "Downward traversing is broken"
-    
-    
+
+
 def test_invalid_direction(soils_data):
     # Initialize test data
     comid = 1
-    attribute = 'attribute'
+    attribute = "attribute"
     direction = "invalid"
 
     # Invoke the function under test and check for ValueError
@@ -55,5 +55,3 @@ def test_invalid_direction(soils_data):
 
 def test_soils_extension() -> None:
     cfg = sample_gage_cfg()
-    
-

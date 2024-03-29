@@ -202,7 +202,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         "zone_edge_uparea",
         "zone_edge_vs_gage_area_difference",
         "drainage_area_percent_error",
-        "a_merit_a_usgs_ratio"
+        "a_merit_a_usgs_ratio",
     ]
     result = result_df[columns]
     result = result.dropna()
@@ -399,5 +399,5 @@ def new_zone_connectivity(
     pairs = format_pairs(river_graph)
 
     full_zone_root.create_dataset(
-        "pairs", data=np.array(pairs), chunks=(5000,5000), dtype="float32"
+        "pairs", data=np.array(pairs), chunks=(5000, 5000), dtype="float32"
     )

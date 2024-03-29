@@ -119,7 +119,7 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
         Path(cfg.create_streamflow.obs_attributes) / f"COMID_{str(cfg.zone)[0]}.csv"
     )
     id_to_area = attrs_df.set_index("COMID")["unitarea"].to_dict()
-    
+
     edge_comids = np.unique(edges.merit_basin[:])  # already sorted
 
     streamflow_predictions_root = zarr.open(
@@ -129,12 +129,12 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
     file_runoff = np.transpose(streamflow_predictions_root.Runoff)
 
     streamflow_comids: np.ndarray = streamflow_predictions_root.COMID[:].astype(int)
-    
+
     log.info("Mapping predictions to zone COMIDs")
     runoff_full_zone = np.zeros((file_runoff.shape[0], edge_comids.shape[0]))
     indices = np.searchsorted(edge_comids, streamflow_comids)
     runoff_full_zone[:, indices] = file_runoff
-    
+
     log.info("Creating areas areas_array")
     areas = np.zeros_like(edge_comids, dtype=np.float64)
     for idx, comid in enumerate(edge_comids):
@@ -150,7 +150,7 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
     streamflow_m3_s_data = np.nan_to_num(
         streamflow_m3_s_data, nan=1e-6, posinf=1e-6, neginf=1e-6
     )
-    mask =  (streamflow_m3_s_data == 0)
+    mask = streamflow_m3_s_data == 0
     streamflow_m3_s_data[mask] = 1e-6
 
     date_range = pd.date_range(

@@ -81,7 +81,7 @@ def create_MERIT_FLOW_TM(
     river_graph_ids = edges.id[:]
     merit_basin = edges.merit_basin[:]
     river_graph_len = edges.len[:]
-    
+
     # indices = np.zeros((len(COMIDs), len(river_graph_ids)), dtype=np.float64)
     # for i, basin_id in tqdm(enumerate(COMIDs), total=len(COMIDs), ncols=140, ascii=True, desc="reading idx"):
     #     mask = merit_basin == basin_id
@@ -89,11 +89,11 @@ def create_MERIT_FLOW_TM(
 
     # # Calculate the number of non-zero elements for each row in indices
     # num_non_zeros = indices.sum(axis=1)
-    
+
     # proportions = np.transpose(indices) / num_non_zeros
-    
+
     # tm = np.transpose(proportions)
-    
+
     data_np = np.zeros((len(COMIDs), len(river_graph_ids)))
     for i, basin_id in enumerate(
         tqdm(
@@ -124,7 +124,7 @@ def create_MERIT_FLOW_TM(
     )
     log.info("Writing MERIT TM to zarr store")
     zarr_path = Path(cfg.create_TMs.MERIT.TM)
-    xr_dataset.to_zarr(zarr_path, mode="w")        
+    xr_dataset.to_zarr(zarr_path, mode="w")
     # zarr_hierarchy = zarr.open_group(Path(cfg.create_TMs.MERIT.TM), mode="r")
 
 
