@@ -33,7 +33,7 @@ create_streamflow:
   end_date: 12-31-2020
 extensions:
   - soils_data
-
+  - pet_forcing
 # Hydra Config ------------------------------------------------------------------------#
 hydra:
   help:

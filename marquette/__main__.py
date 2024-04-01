@@ -61,6 +61,11 @@ def run_extensions(cfg, edges):
 
         log.info("Adding soils information to your MERIT River Graph")
         soils_data(cfg, edges)
+    if "pet_forcing" in cfg.extensions:
+        from marquette.merit.extensions import pet_forcing
+
+        log.info("Adding PET forcing to your MERIT River Graph")
+        pet_forcing(cfg, edges)
 
 
 if __name__ == "__main__":
