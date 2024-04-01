@@ -10,29 +10,19 @@ from dask.dataframe.io.io import from_pandas
 from omegaconf import DictConfig
 from tqdm import tqdm
 
-from marquette.merit._connectivity_matrix import (
-    create_gage_connectivity,
-    map_gages_to_zone,
-    new_zone_connectivity,
-)
+from marquette.merit._connectivity_matrix import (create_gage_connectivity,
+                                                  map_gages_to_zone,
+                                                  new_zone_connectivity)
 from marquette.merit._edge_calculations import (
-    calculate_num_edges,
-    create_segment,
-    find_flowlines,
-    many_segment_to_edge_partition,
-    singular_segment_to_edge_partition,
-    sort_xarray_dataarray,
-)
+    calculate_num_edges, create_segment, find_flowlines,
+    many_segment_to_edge_partition, singular_segment_to_edge_partition,
+    sort_xarray_dataarray)
 from marquette.merit._streamflow_conversion_functions import (
-    calculate_huc10_flow_from_individual_files,
-    calculate_merit_flow,
-    separate_basins,
-)
-from marquette.merit._TM_calculations import (
-    create_HUC_MERIT_TM,
-    create_MERIT_FLOW_TM,
-    join_geospatial_data,
-)
+    calculate_huc10_flow_from_individual_files, calculate_merit_flow,
+    separate_basins)
+from marquette.merit._TM_calculations import (create_HUC_MERIT_TM,
+                                              create_MERIT_FLOW_TM,
+                                              join_geospatial_data)
 
 log = logging.getLogger(__name__)
 
