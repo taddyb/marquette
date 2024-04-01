@@ -34,6 +34,7 @@ create_streamflow:
 extensions:
   - soils_data
   - pet_forcing
+  - global_dhbv_static_inputs
 # Hydra Config ------------------------------------------------------------------------#
 hydra:
   help:

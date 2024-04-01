@@ -147,7 +147,7 @@ def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
         pet_comid_arr = np.concatenate(pet_comid_data)
         pet_arr = np.concatenate(pet_edge_data)
 
-        if pet_arr.shape[0] != len(edge_merit_basins):
+        if pet_arr.shape[0] != len(np.unique(edge_merit_basins)):
             raise ValueError(
                 "PET forcing data is not consistent. Check the number of comids in the data and the edge_merit_basins array."
             )
@@ -162,3 +162,80 @@ def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
         mapped_attr = pet_arr[mapping]
         root.array(name="pet", data=mapped_attr)
         root.array(name="comid", data=pet_comid_arr)
+        
+        
+
+def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
+    """
+    Pulling Data from the global_dhbv_static_inputs data and storing it in a zarr store
+    All attrs are as follows:        
+    attributeLst = ['area','ETPOT_Hargr', 'FW', 'HWSD_clay', 'HWSD_gravel', 'HWSD_sand',
+       'HWSD_silt', 'NDVI', 'Porosity', 'SoilGrids1km_clay',
+       'SoilGrids1km_sand', 'SoilGrids1km_silt', 'T_clay', 'T_gravel',
+       'T_sand', 'T_silt', 'aridity', 'glaciers', 'meanP', 'meanTa',
+       'meanelevation', 'meanslope', 'permafrost', 'permeability',
+       'seasonality_P', 'seasonality_PET', 'snow_fraction',
+       'snowfall_fraction']
+    """
+    zarr_data_path = Path(cfg.data_path) / f"extensions/global_dhbv_static_inputs/{cfg.zone}"
+    if zarr_data_path.exists():
+        log.info("global_dhbv_static_inputs already exists in zarr format")
+    else:
+        root = zarr.group(store=zarr_data_path)
+        file_path = Path(
+            f"/projects/mhpi/hjj5218/data/global/zarr_sub_zone/{cfg.zone}"
+        )
+        num_timesteps = pd.date_range(
+            start=cfg.create_streamflow.start_date,
+            end=cfg.create_streamflow.end_date,
+            freq="d",
+        ).shape[0]
+        if file_path.exists() is False:
+            raise FileNotFoundError("global_dhbv_static_inputs data not found")
+        edge_merit_basins: np.ndarray = edges.merit_basin[:]
+        comid_data = []
+        aridity_data = []
+        porosity_data = []
+        mean_p_data = []
+        mean_elevation_data = []
+        glaciers_data = []
+        
+        mapping = np.empty_like(edge_merit_basins, dtype=int)
+        files = file_path.glob("*")
+        for file in files:
+            pet_zone_data = zarr.open_group(file, mode="r")
+            comids = pet_zone_data.COMID[:]
+            aridity = pet_zone_data.attrs.aridity[:]
+            porosity = pet_zone_data.attrs.Porosity[:]
+            mean_p = pet_zone_data.attrs.meanP[:]
+            mean_elevation = pet_zone_data.attrs.meanelevation[:]
+            glaciers = pet_zone_data.attrs.glaciers[:]
+            
+            comid_data.append(comids)
+            aridity_data.append(aridity)
+            porosity_data.append(porosity)
+            mean_p_data.append(mean_p)
+            mean_elevation_data.append(mean_elevation)
+            glaciers_data.append(glaciers)
+            
+        comid_arr = np.concatenate(comid_data)
+        aridity_arr = np.concatenate(aridity_data)
+        porosity_arr = np.concatenate(porosity_data)
+        mean_p_arr = np.concatenate(mean_p_data)
+        mean_elevation_arr = np.concatenate(mean_elevation_data)
+        glacier_arr = np.concatenate(glaciers_data)
+
+        if comid_arr.shape[0] != len(np.unique(edge_merit_basins)):
+            raise ValueError(
+                "data is not consistent. Check the number of comids in the data and the edge_merit_basins array."
+            )
+
+        for i, id in enumerate(tqdm(comid_arr, desc="\rProcessing data")):
+            idx = np.where(edge_merit_basins == id)[0]
+            mapping[idx] = i
+        root.array(name="aridity", data=aridity_arr[mapping])
+        root.array(name="comid", data=comid_arr[mapping])
+        root.array(name="porosity", data=porosity_arr[mapping])
+        root.array(name="mean_p", data=mean_p_arr[mapping])
+        root.array(name="mean_elevation", data=mean_elevation_arr[mapping])
+        root.array(name="glacier", data=glacier_arr[mapping])
