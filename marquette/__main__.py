@@ -23,8 +23,12 @@ def main(cfg: DictConfig) -> None:
     if cfg.name.lower() == "hydrofabric":
         raise ImportError("Hydrofabric functionality not yet supported")
     elif cfg.name.lower() == "merit":
-        from marquette.merit.create import (create_edges, create_N, create_TMs,
-                                            write_streamflow)
+        from marquette.merit.create import (
+            create_edges,
+            create_N,
+            create_TMs,
+            write_streamflow,
+        )
 
         start = time.perf_counter()
         log.info(f"Creating MERIT {cfg.zone} River Graph")

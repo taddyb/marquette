@@ -115,16 +115,22 @@ def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
                 attr, attr_values, mapping, polyline_gdf
             )
             root.array(name=names[i], data=_attr_nan_filter[mapping])
-            
-            
+
+
 def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
     pet_zarr_data_path = Path(cfg.data_path) / f"extensions/pet_forcing/{cfg.zone}"
     if pet_zarr_data_path.exists():
         log.info("PET forcing data already exists in zarr format")
     else:
         root = zarr.group(store=pet_zarr_data_path)
-        num_timesteps = pd.date_range(start=cfg.create_streamflow.start_date, end=cfg.create_streamflow.end_date, freq='d').shape[0]
-        pet_file_path = Path(f"/projects/mhpi/hjj5218/data/global/zarr_sub_zone/{cfg.zone}")
+        pet_file_path = Path(
+            f"/projects/mhpi/hjj5218/data/global/zarr_sub_zone/{cfg.zone}"
+        )
+        num_timesteps = pd.date_range(
+            start=cfg.create_streamflow.start_date,
+            end=cfg.create_streamflow.end_date,
+            freq="d",
+        ).shape[0]
         if pet_file_path.exists() is False:
             raise FileNotFoundError("PET forcing data not found")
         edge_merit_basins: np.ndarray = edges.merit_basin[:]
@@ -140,6 +146,16 @@ def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
             pet_edge_data.append(pet)
         pet_comid_arr = np.concatenate(pet_comid_data)
         pet_arr = np.concatenate(pet_edge_data)
+
+        if pet_arr.shape[0] != len(edge_merit_basins):
+            raise ValueError(
+                "PET forcing data is not consistent. Check the number of comids in the data and the edge_merit_basins array."
+            )
+        if pet_arr.shape[1] != num_timesteps:
+            raise ValueError(
+                "PET forcing data is not consistent. Check the number of timesteps in the data and the num_timesteps variable."
+            )
+
         for i, id in enumerate(tqdm(pet_comid_arr, desc="\rProcessing PET data")):
             idx = np.where(edge_merit_basins == id)[0]
             mapping[idx] = i
