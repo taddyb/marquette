@@ -102,7 +102,21 @@ def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
             "sand_mean_05",
             "silt_mean_05",
         ]
-        df_filled = df.fill_null(strategy="zero")
+        df_filled = df.with_columns(
+            pl.when(pl.col(["Ks_05_M_25", "SF_05_M_25"]).is_null())
+            .then(pl.col(["Ks_05_M_25", "SF_05_M_25"]).fill_null(strategy="max"))
+            .otherwise(pl.col(["Ks_05_M_25", "SF_05_M_25"]))
+        )
+        df_filled = df_filled.with_columns(
+            pl.when(pl.col(["N_05_M_250", "AF_05_M_25"]).is_null())
+            .then(pl.col(["N_05_M_250", "AF_05_M_25"]).fill_null(strategy="min"))
+            .otherwise(pl.col(["N_05_M_250", "AF_05_M_25"]))
+        )
+        df_filled = df_filled.with_columns(
+            pl.when(pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]).is_null())
+            .then(pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]).fill_null(strategy="forward"))
+            .otherwise(pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]))
+        )
         edges_df = pl.DataFrame({"COMID": edges.merit_basin[:]})
         joined_df = df_filled.join(edges_df, on="COMID", how="left", join_nulls=True)
         for i in range(len(names)):
