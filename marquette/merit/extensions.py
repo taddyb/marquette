@@ -1,7 +1,5 @@
 import logging
-from enum import Enum
 from pathlib import Path
-from typing import List
 
 import geopandas as gpd
 import numpy as np
@@ -45,7 +43,6 @@ log = logging.getLogger(__name__)
 #     return traverse_df
 
 
-
 # def spatial_nan_filter(
 #     df: pl.DataFrame,
 # ) -> pl.DataFrame:
@@ -82,9 +79,9 @@ def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
             / f"raw/routing_soil_properties/riv_pfaf_{cfg.zone}_buff_split_soil_properties.shp"
         )
         polyline_gdf = gpd.read_file(flowline_file)
-        gdf = pd.DataFrame(polyline_gdf.drop(columns='geometry'))
+        gdf = pd.DataFrame(polyline_gdf.drop(columns="geometry"))
         df = pl.from_pandas(gdf)
-        df = df.with_columns(pl.col("COMID").cast(pl.Int64))  #convert COMID to int64
+        df = df.with_columns(pl.col("COMID").cast(pl.Int64))  # convert COMID to int64
         attributes = [
             "Ks_05_M_25",
             "N_05_M_250",
@@ -109,7 +106,10 @@ def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
         edges_df = pl.DataFrame({"COMID": edges.merit_basin[:]})
         joined_df = df_filled.join(edges_df, on="COMID", how="left", join_nulls=True)
         for i in range(len(names)):
-            root.array(name=names[i], data=joined_df.select(pl.col(attributes[i])).to_numpy().squeeze())
+            root.array(
+                name=names[i],
+                data=joined_df.select(pl.col(attributes[i])).to_numpy().squeeze(),
+            )
 
 
 def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
