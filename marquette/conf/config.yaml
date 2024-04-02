@@ -32,9 +32,9 @@ create_streamflow:
   start_date: 01-01-1980
   end_date: 12-31-2020
 extensions:
-  - soils_data
-  - pet_forcing
-  - global_dhbv_static_inputs
+  soils_data: ${data_path}raw/routing_soil_properties/riv_pfaf_${zone}_buff_split_soil_properties.shp
+  pet_forcing: /projects/mhpi/data/global/zarr_sub_zone/${zone}
+  global_dhbv_static_inputs: /projects/mhpi/data/global/zarr_sub_zone/${zone}
 # Hydra Config ------------------------------------------------------------------------#
 hydra:
   help:

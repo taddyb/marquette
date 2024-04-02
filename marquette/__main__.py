@@ -66,7 +66,7 @@ def run_extensions(cfg, edges):
 
         log.info("Adding PET forcing to your MERIT River Graph")
         pet_forcing(cfg, edges)
-        
+
     if "global_dhbv_static_inputs" in cfg.extensions:
         from marquette.merit.extensions import global_dhbv_static_inputs
 
