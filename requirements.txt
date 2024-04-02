@@ -1,4 +1,5 @@
 dask[complete]
+polars
 dask-expr
 dask-geopandas
 dask_labextension
