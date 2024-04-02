@@ -1,10 +1,12 @@
 import logging
 from enum import Enum
 from pathlib import Path
+from typing import List
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import polars as pl
 import zarr
 from omegaconf import DictConfig
 from tqdm import tqdm
@@ -12,64 +14,61 @@ from tqdm import tqdm
 log = logging.getLogger(__name__)
 
 
-class Direction(Enum):
-    up = "up"
-    down = "down"
+# class Direction(Enum):
+#     up = "up"
+#     down = "down"
 
 
-def traverse(gdf: gpd.GeoDataFrame, comid: float, attribute: str, direction: Direction):
-    if direction == Direction.up:
-        # Using only the up1 dir as we know it always exists
-        _traverse = "up1"
-    elif direction == Direction.down:
-        _traverse = "NextDownID"
-    else:
-        raise ValueError("Invalid direction. Look at the Direction Enum and ")
-    if comid == 0:
-        return np.nan
-    else:
-        fill_value = gdf[attribute][gdf.COMID == comid].values
-        if np.isnan(fill_value)[0]:
-            next_id = gdf[_traverse][gdf.COMID == comid].values[0]
-            return traverse(gdf, next_id, attribute, direction)
-        else:
-            return fill_value
+# def traverse(df: pl.DataFrame, direction: Direction, count=1):
+# TODO: Get this to work
+#     if direction == Direction.up:
+#         # Using only the up1 dir as we know it always exists
+#         _traverse = "up1"
+#         renamed_col = "NextDownID"
+#     elif direction == Direction.down:
+#         _traverse = "NextDownID"
+#         renamed_col = "up1"
+#     else:
+#         raise ValueError("Invalid direction. Look at the Direction Enum")
+#     traverse_df = df.clone()
+#     for _ in range(count):
+#         traverse_df = traverse_df.rename(
+#             {"COMID": "_COMID"}
+#         ).with_columns(
+#             pl.when(pl.col(_traverse) == 0)
+#             .then(pl.col("_COMID"))
+#             .otherwise(pl.col(renamed_col))
+#             .alias("COMID")
+#         )
+#         traverse_df = df.join(other=traverse_df, on="COMID", how="semi", join_nulls=True)
+#         traverse_df = traverse_df.drop("_COMID")
+#     return traverse_df
 
 
-def spatial_nan_filter(
-    attribute: str,
-    attr_values: np.ndarray,
-    mapping: np.ndarray,
-    polyline_gdf: gpd.GeoDataFrame,
-) -> np.ndarray:
-    """
-    Filling NaN values based on the predictions up or downstream
-    Using the min value of the attribute is no Up or Downstream values are available
-    """
-    _attr_mapped = attr_values[mapping]
-    mask = np.isnan(_attr_mapped)
-    if mask.sum() == 0:
-        return _attr_mapped
-    else:
-        nan_idx = mapping[mask]
-        nan_fill = np.empty_like(nan_idx, dtype=float)
-        for i, idx in enumerate(
-            tqdm(nan_idx, desc=f"\rFilling NaN values for {attribute}")
-        ):
-            downstream_comid = polyline_gdf.NextDownID[idx]
-            fill_value = traverse(
-                polyline_gdf, downstream_comid, attribute, Direction.down
-            )
-            if np.isnan(fill_value):
-                upstream_comid = polyline_gdf.up1[idx]
-                fill_value = traverse(
-                    polyline_gdf, upstream_comid, attribute, Direction.up
-                )
-                if np.isnan(fill_value):
-                    fill_value = np.nanmin(polyline_gdf[attribute])
-            nan_fill[i] = fill_value
-        _attr_mapped[mask] = nan_fill
-        return _attr_mapped
+
+# def spatial_nan_filter(
+#     df: pl.DataFrame,
+# ) -> pl.DataFrame:
+#     """
+#     Filling NaN values based on the predictions up or downstream
+#     Using the min value of the attribute is no Up or Downstream values are available
+#     """
+#     # TODO: Get this to work
+#     if df.null_count().to_numpy().sum() == 0:
+#         return df
+#     else:
+#         filled_df = traverse(
+#             df, Direction.down, count=3
+#         )
+#         if df.null_count().to_numpy().sum():
+#             filled_df = traverse(
+#                 filled_df, Direction.up
+#             )
+#             if np.isnan(fill_value):
+#                 fill_value = np.nanmin(df[attribute])
+#             nan_fill[i] = fill_value
+#         _attr_mapped[mask] = nan_fill
+#         return _attr_mapped
 
 
 def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
@@ -83,12 +82,9 @@ def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
             / f"raw/routing_soil_properties/riv_pfaf_{cfg.zone}_buff_split_soil_properties.shp"
         )
         polyline_gdf = gpd.read_file(flowline_file)
-        edge_merit_basins: np.ndarray = edges.merit_basin[:]
-        gdf_ids = np.array(polyline_gdf.COMID, dtype=int)
-        mapping = np.empty_like(edge_merit_basins, dtype=int)
-        for i, id in enumerate(tqdm(gdf_ids, desc="\rProcessing soil data")):
-            idx = np.where(edge_merit_basins == id)[0]
-            mapping[idx] = i
+        gdf = pd.DataFrame(polyline_gdf.drop(columns='geometry'))
+        df = pl.from_pandas(gdf)
+        df = df.with_columns(pl.col("COMID").cast(pl.Int64))  #convert COMID to int64
         attributes = [
             "Ks_05_M_25",
             "N_05_M_250",
@@ -109,12 +105,11 @@ def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
             "sand_mean_05",
             "silt_mean_05",
         ]
-        for i, attr in enumerate(attributes):
-            attr_values = polyline_gdf[attr].values
-            _attr_nan_filter = spatial_nan_filter(
-                attr, attr_values, mapping, polyline_gdf
-            )
-            root.array(name=names[i], data=_attr_nan_filter[mapping])
+        df_filled = df.fill_null(strategy="zero")
+        edges_df = pl.DataFrame({"COMID": edges.merit_basin[:]})
+        joined_df = df_filled.join(edges_df, on="COMID", how="left", join_nulls=True)
+        for i in range(len(names)):
+            root.array(name=names[i], data=joined_df.select(pl.col(attributes[i])).to_numpy().squeeze())
 
 
 def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
