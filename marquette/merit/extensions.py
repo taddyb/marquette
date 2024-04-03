@@ -118,9 +118,7 @@ def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
     )
     graph_cols = ["COMID", "up1", "NextDownID"]
     df_cols = graph_cols + attributes
-    _df = df_filled.select(
-        pl.col(df_cols)
-    )
+    _df = df_filled.select(pl.col(df_cols))
     edges_df = pl.DataFrame({"COMID": edges.merit_basin[:]})
     joined_df = edges_df.join(_df, on="COMID", how="left", join_nulls=True)
     for i in range(len(names)):
