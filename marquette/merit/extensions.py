@@ -116,8 +116,11 @@ def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
         )
         .otherwise(pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]))
     )
+    graph_cols = ["COMID", "up1", "NextDownID"]
+    df_cols = graph_cols + attributes
+    _df = df_filled.select(pl.col(df_cols))
     edges_df = pl.DataFrame({"COMID": edges.merit_basin[:]})
-    joined_df = df_filled.join(edges_df, on="COMID", how="left", join_nulls=True)
+    joined_df = edges_df.join(_df, on="COMID", how="left", join_nulls=True)
     for i in range(len(names)):
         edges.array(
             name=names[i],
