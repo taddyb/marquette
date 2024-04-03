@@ -69,106 +69,99 @@ log = logging.getLogger(__name__)
 
 
 def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
-    soils_data_path = Path(cfg.data_path) / f"extensions/soils_data/{cfg.zone}"
-    if soils_data_path.exists():
-        log.info("Soils data already exists in zarr format")
-    else:
-        root = zarr.group(soils_data_path)
-        flowline_file = (
-            Path(cfg.data_path)
-            / f"raw/routing_soil_properties/riv_pfaf_{cfg.zone}_buff_split_soil_properties.shp"
-        )
-        polyline_gdf = gpd.read_file(flowline_file)
-        gdf = pd.DataFrame(polyline_gdf.drop(columns="geometry"))
-        df = pl.from_pandas(gdf)
-        df = df.with_columns(pl.col("COMID").cast(pl.Int64))  # convert COMID to int64
-        attributes = [
-            "Ks_05_M_25",
-            "N_05_M_250",
-            "SF_05_M_25",
-            "AF_05_M_25",
-            "OM_05_M_25",
-            "Cl_05_Mn",
-            "Sd_05_Mn",
-            "St_05_Mn",
-        ]
-        names = [
-            "ksat",
-            "N",
-            "sat-field",
-            "alpha",
-            "ormc",
-            "clay_mean_05",
-            "sand_mean_05",
-            "silt_mean_05",
-        ]
-        df_filled = df.with_columns(
-            pl.when(pl.col(["Ks_05_M_25", "SF_05_M_25"]).is_null())
-            .then(pl.col(["Ks_05_M_25", "SF_05_M_25"]).fill_null(strategy="max"))
-            .otherwise(pl.col(["Ks_05_M_25", "SF_05_M_25"]))
-        )
-        df_filled = df_filled.with_columns(
-            pl.when(pl.col(["N_05_M_250", "AF_05_M_25"]).is_null())
-            .then(pl.col(["N_05_M_250", "AF_05_M_25"]).fill_null(strategy="min"))
-            .otherwise(pl.col(["N_05_M_250", "AF_05_M_25"]))
-        )
-        df_filled = df_filled.with_columns(
-            pl.when(pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]).is_null())
-            .then(pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]).fill_null(strategy="forward"))
-            .otherwise(pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]))
-        )
-        edges_df = pl.DataFrame({"COMID": edges.merit_basin[:]})
-        joined_df = df_filled.join(edges_df, on="COMID", how="left", join_nulls=True)
-        for i in range(len(names)):
-            root.array(
-                name=names[i],
-                data=joined_df.select(pl.col(attributes[i])).to_numpy().squeeze(),
+    flowline_file = (
+        Path(cfg.data_path)
+        / f"raw/routing_soil_properties/riv_pfaf_{cfg.zone}_buff_split_soil_properties.shp"
+    )
+    polyline_gdf = gpd.read_file(flowline_file)
+    gdf = pd.DataFrame(polyline_gdf.drop(columns="geometry"))
+    df = pl.from_pandas(gdf)
+    df = df.with_columns(pl.col("COMID").cast(pl.Int64))  # convert COMID to int64
+    attributes = [
+        "Ks_05_M_25",
+        "N_05_M_250",
+        "SF_05_M_25",
+        "AF_05_M_25",
+        "OM_05_M_25",
+        "Cl_05_Mn",
+        "Sd_05_Mn",
+        "St_05_Mn",
+    ]
+    names = [
+        "ksat",
+        "N",
+        "sat-field",
+        "alpha",
+        "ormc",
+        "clay_mean_05",
+        "sand_mean_05",
+        "silt_mean_05",
+    ]
+    df_filled = df.with_columns(
+        pl.when(pl.col(["Ks_05_M_25", "SF_05_M_25"]).is_null())
+        .then(pl.col(["Ks_05_M_25", "SF_05_M_25"]).fill_null(strategy="max"))
+        .otherwise(pl.col(["Ks_05_M_25", "SF_05_M_25"]))
+    )
+    df_filled = df_filled.with_columns(
+        pl.when(pl.col(["N_05_M_250", "AF_05_M_25"]).is_null())
+        .then(pl.col(["N_05_M_250", "AF_05_M_25"]).fill_null(strategy="min"))
+        .otherwise(pl.col(["N_05_M_250", "AF_05_M_25"]))
+    )
+    df_filled = df_filled.with_columns(
+        pl.when(pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]).is_null())
+        .then(
+            pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]).fill_null(
+                strategy="forward"
             )
+        )
+        .otherwise(pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]))
+    )
+    edges_df = pl.DataFrame({"COMID": edges.merit_basin[:]})
+    joined_df = df_filled.join(edges_df, on="COMID", how="left", join_nulls=True)
+    for i in range(len(names)):
+        edges.array(
+            name=names[i],
+            data=joined_df.select(pl.col(attributes[i])).to_numpy().squeeze(),
+        )
 
 
 def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
-    pet_zarr_data_path = Path(cfg.data_path) / f"extensions/pet_forcing/{cfg.zone}"
-    if pet_zarr_data_path.exists():
-        log.info("PET forcing data already exists in zarr format")
-    else:
-        root = zarr.group(store=pet_zarr_data_path)
-        pet_file_path = Path(f"/projects/mhpi/data/global/zarr_sub_zone/{cfg.zone}")
-        num_timesteps = pd.date_range(
-            start=cfg.create_streamflow.start_date,
-            end=cfg.create_streamflow.end_date,
-            freq="d",
-        ).shape[0]
-        if pet_file_path.exists() is False:
-            raise FileNotFoundError("PET forcing data not found")
-        edge_merit_basins: np.ndarray = edges.merit_basin[:]
-        pet_edge_data = []
-        pet_comid_data = []
-        mapping = np.empty_like(edge_merit_basins, dtype=int)
-        files = pet_file_path.glob("*")
-        for file in files:
-            pet_zone_data = zarr.open_group(file, mode="r")
-            comids = pet_zone_data.COMID[:]
-            pet = pet_zone_data.PET[:]
-            pet_comid_data.append(comids)
-            pet_edge_data.append(pet)
-        pet_comid_arr = np.concatenate(pet_comid_data)
-        pet_arr = np.concatenate(pet_edge_data)
+    pet_file_path = Path(f"/projects/mhpi/data/global/zarr_sub_zone/{cfg.zone}")
+    num_timesteps = pd.date_range(
+        start=cfg.create_streamflow.start_date,
+        end=cfg.create_streamflow.end_date,
+        freq="d",
+    ).shape[0]
+    if pet_file_path.exists() is False:
+        raise FileNotFoundError("PET forcing data not found")
+    edge_merit_basins: np.ndarray = edges.merit_basin[:]
+    pet_edge_data = []
+    pet_comid_data = []
+    mapping = np.empty_like(edge_merit_basins, dtype=int)
+    files = pet_file_path.glob("*")
+    for file in files:
+        pet_zone_data = zarr.open_group(file, mode="r")
+        comids = pet_zone_data.COMID[:]
+        pet = pet_zone_data.PET[:]
+        pet_comid_data.append(comids)
+        pet_edge_data.append(pet)
+    pet_comid_arr = np.concatenate(pet_comid_data)
+    pet_arr = np.concatenate(pet_edge_data)
 
-        if pet_arr.shape[0] != len(np.unique(edge_merit_basins)):
-            raise ValueError(
-                "PET forcing data is not consistent. Check the number of comids in the data and the edge_merit_basins array."
-            )
-        if pet_arr.shape[1] != num_timesteps:
-            raise ValueError(
-                "PET forcing data is not consistent. Check the number of timesteps in the data and the num_timesteps variable."
-            )
+    if pet_arr.shape[0] != len(np.unique(edge_merit_basins)):
+        raise ValueError(
+            "PET forcing data is not consistent. Check the number of comids in the data and the edge_merit_basins array."
+        )
+    if pet_arr.shape[1] != num_timesteps:
+        raise ValueError(
+            "PET forcing data is not consistent. Check the number of timesteps in the data and the num_timesteps variable."
+        )
 
-        for i, id in enumerate(tqdm(pet_comid_arr, desc="\rProcessing PET data")):
-            idx = np.where(edge_merit_basins == id)[0]
-            mapping[idx] = i
-        mapped_attr = pet_arr[mapping]
-        root.array(name="pet", data=mapped_attr)
-        root.array(name="comid", data=pet_comid_arr)
+    for i, id in enumerate(tqdm(pet_comid_arr, desc="\rProcessing PET data")):
+        idx = np.where(edge_merit_basins == id)[0]
+        mapping[idx] = i
+    mapped_attr = pet_arr[mapping]
+    edges.array(name="pet", data=mapped_attr)
 
 
 def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
@@ -183,60 +176,52 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
        'seasonality_P', 'seasonality_PET', 'snow_fraction',
        'snowfall_fraction']
     """
-    zarr_data_path = (
-        Path(cfg.data_path) / f"extensions/global_dhbv_static_inputs/{cfg.zone}"
-    )
-    if zarr_data_path.exists():
-        log.info("global_dhbv_static_inputs already exists in zarr format")
-    else:
-        root = zarr.group(store=zarr_data_path)
-        file_path = Path(f"/projects/mhpi/data/global/zarr_sub_zone/{cfg.zone}")
-        if file_path.exists() is False:
-            raise FileNotFoundError("global_dhbv_static_inputs data not found")
-        edge_merit_basins: np.ndarray = edges.merit_basin[:]
-        comid_data = []
-        aridity_data = []
-        porosity_data = []
-        mean_p_data = []
-        mean_elevation_data = []
-        glaciers_data = []
+    file_path = Path(f"/projects/mhpi/data/global/zarr_sub_zone/{cfg.zone}")
+    if file_path.exists() is False:
+        raise FileNotFoundError("global_dhbv_static_inputs data not found")
+    edge_merit_basins: np.ndarray = edges.merit_basin[:]
+    comid_data = []
+    aridity_data = []
+    porosity_data = []
+    mean_p_data = []
+    mean_elevation_data = []
+    glaciers_data = []
 
-        mapping = np.empty_like(edge_merit_basins, dtype=int)
-        files = file_path.glob("*")
-        for file in files:
-            pet_zone_data = zarr.open_group(file, mode="r")
-            comids = pet_zone_data.COMID[:]
-            aridity = pet_zone_data["attrs"]["aridity"][:]
-            porosity = pet_zone_data["attrs"]["Porosity"][:]
-            mean_p = pet_zone_data["attrs"]["meanP"][:]
-            mean_elevation = pet_zone_data["attrs"]["meanelevation"][:]
-            glaciers = pet_zone_data["attrs"]["glaciers"][:]
+    mapping = np.empty_like(edge_merit_basins, dtype=int)
+    files = file_path.glob("*")
+    for file in files:
+        pet_zone_data = zarr.open_group(file, mode="r")
+        comids = pet_zone_data.COMID[:]
+        aridity = pet_zone_data["attrs"]["aridity"][:]
+        porosity = pet_zone_data["attrs"]["Porosity"][:]
+        mean_p = pet_zone_data["attrs"]["meanP"][:]
+        mean_elevation = pet_zone_data["attrs"]["meanelevation"][:]
+        glaciers = pet_zone_data["attrs"]["glaciers"][:]
 
-            comid_data.append(comids)
-            aridity_data.append(aridity)
-            porosity_data.append(porosity)
-            mean_p_data.append(mean_p)
-            mean_elevation_data.append(mean_elevation)
-            glaciers_data.append(glaciers)
+        comid_data.append(comids)
+        aridity_data.append(aridity)
+        porosity_data.append(porosity)
+        mean_p_data.append(mean_p)
+        mean_elevation_data.append(mean_elevation)
+        glaciers_data.append(glaciers)
 
-        comid_arr = np.concatenate(comid_data)
-        aridity_arr = np.concatenate(aridity_data)
-        porosity_arr = np.concatenate(porosity_data)
-        mean_p_arr = np.concatenate(mean_p_data)
-        mean_elevation_arr = np.concatenate(mean_elevation_data)
-        glacier_arr = np.concatenate(glaciers_data)
+    comid_arr = np.concatenate(comid_data)
+    aridity_arr = np.concatenate(aridity_data)
+    porosity_arr = np.concatenate(porosity_data)
+    mean_p_arr = np.concatenate(mean_p_data)
+    mean_elevation_arr = np.concatenate(mean_elevation_data)
+    glacier_arr = np.concatenate(glaciers_data)
 
-        if comid_arr.shape[0] != len(np.unique(edge_merit_basins)):
-            raise ValueError(
-                "data is not consistent. Check the number of comids in the data and the edge_merit_basins array."
-            )
+    if comid_arr.shape[0] != len(np.unique(edge_merit_basins)):
+        raise ValueError(
+            "data is not consistent. Check the number of comids in the data and the edge_merit_basins array."
+        )
 
-        for i, id in enumerate(tqdm(comid_arr, desc="\rProcessing data")):
-            idx = np.where(edge_merit_basins == id)[0]
-            mapping[idx] = i
-        root.array(name="aridity", data=aridity_arr[mapping])
-        root.array(name="comid", data=comid_arr[mapping])
-        root.array(name="porosity", data=porosity_arr[mapping])
-        root.array(name="mean_p", data=mean_p_arr[mapping])
-        root.array(name="mean_elevation", data=mean_elevation_arr[mapping])
-        root.array(name="glacier", data=glacier_arr[mapping])
+    for i, id in enumerate(tqdm(comid_arr, desc="\rProcessing data")):
+        idx = np.where(edge_merit_basins == id)[0]
+        mapping[idx] = i
+    edges.array(name="aridity", data=aridity_arr[mapping])
+    edges.array(name="porosity", data=porosity_arr[mapping])
+    edges.array(name="mean_p", data=mean_p_arr[mapping])
+    edges.array(name="mean_elevation", data=mean_elevation_arr[mapping])
+    edges.array(name="glacier", data=glacier_arr[mapping])

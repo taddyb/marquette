@@ -23,8 +23,12 @@ def main(cfg: DictConfig) -> None:
     if cfg.name.lower() == "hydrofabric":
         raise ImportError("Hydrofabric functionality not yet supported")
     elif cfg.name.lower() == "merit":
-        from marquette.merit.create import (create_edges, create_N, create_TMs,
-                                            write_streamflow)
+        from marquette.merit.create import (
+            create_edges,
+            create_N,
+            create_TMs,
+            write_streamflow,
+        )
 
         start = time.perf_counter()
         log.info(f"Creating MERIT {cfg.zone} River Graph")
@@ -60,18 +64,26 @@ def run_extensions(cfg, edges):
         from marquette.merit.extensions import soils_data
 
         log.info("Adding soils information to your MERIT River Graph")
-        soils_data(cfg, edges)
+        if "ksat" in edges:
+            log.info("global_dhbv_static_inputs already exists in zarr format")
+        else:
+            soils_data(cfg, edges)
     if "pet_forcing" in cfg.extensions:
         from marquette.merit.extensions import pet_forcing
 
         log.info("Adding PET forcing to your MERIT River Graph")
-        pet_forcing(cfg, edges)
-
+        if "pet" in edges:
+            log.info("global_dhbv_static_inputs already exists in zarr format")
+        else:
+            pet_forcing(cfg, edges)
     if "global_dhbv_static_inputs" in cfg.extensions:
         from marquette.merit.extensions import global_dhbv_static_inputs
 
         log.info("Adding global dHBV static input data to your MERIT River Graph")
-        global_dhbv_static_inputs(cfg, edges)
+        if "aridity" in edges:
+            log.info("global_dhbv_static_inputs already exists in zarr format")
+        else:
+            global_dhbv_static_inputs(cfg, edges)
 
 
 if __name__ == "__main__":
