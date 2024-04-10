@@ -84,6 +84,15 @@ def run_extensions(cfg, edges):
             log.info("global_dhbv_static_inputs already exists in zarr format")
         else:
             global_dhbv_static_inputs(cfg, edges)
+            
+    if "incremental_drainage_area" in cfg.extensions:
+        from marquette.merit.extensions import calculate_incremental_drainage_area
+
+        log.info("Adding edge/catchment area input data to your MERIT River Graph")
+        if "incremental_drainage_area" in edges:
+            log.info("incremental_drainage_area already exists in zarr format")
+        else:
+            calculate_incremental_drainage_area(cfg, edges)
 
 
 if __name__ == "__main__":
