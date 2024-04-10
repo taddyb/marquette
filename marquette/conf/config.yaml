@@ -17,9 +17,6 @@ create_N:
   obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_merit_info.csv
   zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}.csv
 create_TMs:
-#  HUC:
-#    TM: ${data_path}/zarr/TMs/PFAF_${zone}
-#    shp_files: ${data_path}/huc_shp_files/huc_10_CONUS.shp
   MERIT:
     save_sparse: True
     TM: ${data_path}/zarr/TMs/MERIT_FLOWLINES_${zone}
@@ -35,6 +32,7 @@ extensions:
   - soils_data
   - pet_forcing
   - global_dhbv_static_inputs
+  - incremental_drainage_area
 # Hydra Config ------------------------------------------------------------------------#
 hydra:
   help:
