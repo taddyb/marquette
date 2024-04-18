@@ -125,10 +125,31 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
     streamflow_predictions_root = zarr.open(
         Path(cfg.create_streamflow.predictions), mode="r"
     )
-    log.info("Reading Zarr Store")
-    file_runoff = np.transpose(streamflow_predictions_root.Runoff)
 
-    streamflow_comids: np.ndarray = streamflow_predictions_root.COMID[:].astype(int)
+    # Different merit forwards have different save outputs. Specifying here to handle the different versions
+    version = int(
+        cfg.create_streamflow.version.lower().split("_v")[1][0]
+    )  # getting the version number
+    if version >= 3:
+        log.info(msg="Reading Zarr Store")
+        zone_keys = [
+            key for key in streamflow_predictions_root.keys() if str(cfg.zone) in key
+        ]
+        zone_comids = []
+        zone_runoff = []
+        for key in zone_keys:
+            zone_comids.append(streamflow_predictions_root[key].COMID[:])
+            zone_runoff.append(streamflow_predictions_root[key].Qr[:])
+        streamflow_comids = np.concatenate(zone_comids).astype(int)
+        file_runoff = np.transpose(np.concatenate(zone_runoff))
+        del zone_comids
+        del zone_runoff
+
+    else:
+        log.info("Reading Zarr Store")
+        file_runoff = np.transpose(streamflow_predictions_root.Runoff)
+
+        streamflow_comids: np.ndarray = streamflow_predictions_root.COMID[:].astype(int)
 
     log.info("Mapping predictions to zone COMIDs")
     runoff_full_zone = np.zeros((file_runoff.shape[0], edge_comids.shape[0]))

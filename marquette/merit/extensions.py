@@ -228,12 +228,12 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
     edges.array(name="mean_p", data=mean_p_arr[mapping])
     edges.array(name="mean_elevation", data=mean_elevation_arr[mapping])
     edges.array(name="glacier", data=glacier_arr[mapping])
-    
-    
+
+
 def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> None:
     """
     Runs a Polars query to calculate the incremental drainage area for each edge in the MERIT dataset
-    """   
+    """
     basin_file = (
         Path(cfg.data_path)
         / f"raw/basins/cat_pfaf_{cfg.zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp"
@@ -243,31 +243,34 @@ def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> N
     gdf = gpd.read_file(basin_file)
     _df = pd.DataFrame(gdf.drop(columns="geometry"))
     df = pl.from_pandas(_df)
-    edges_df = pl.DataFrame({"COMID": edges.merit_basin[:], "id": edges.id[:], "order": np.arange(edges.id.shape[0])})
+    edges_df = pl.DataFrame(
+        {
+            "COMID": edges.merit_basin[:],
+            "id": edges.id[:],
+            "order": np.arange(edges.id.shape[0]),
+        }
+    )
 
-    result = df.lazy().join(
-        other=edges_df.lazy(),
-        left_on="COMID",
-        right_on="COMID",
-        how="left"
-    ).group_by(
-        by="COMID", 
-    ).agg([
-        pl.map_groups(
-            exprs=["unitarea", pl.first("unitarea")],
-            function=lambda list_of_series: 
-                list_of_series[1] / list_of_series[0].shape[0]
-        ).alias("incremental_drainage_area")
-    ]).join(
-        other=edges_df.lazy(),
-        left_on="COMID",
-        right_on="COMID",
-        how="left"
-    ).sort(
-        by="order"
-    ).collect()
+    result = (
+        df.lazy()
+        .join(other=edges_df.lazy(), left_on="COMID", right_on="COMID", how="left")
+        .group_by(
+            by="COMID",
+        )
+        .agg(
+            [
+                pl.map_groups(
+                    exprs=["unitarea", pl.first("unitarea")],
+                    function=lambda list_of_series: list_of_series[1]
+                    / list_of_series[0].shape[0],
+                ).alias("incremental_drainage_area")
+            ]
+        )
+        .join(other=edges_df.lazy(), left_on="COMID", right_on="COMID", how="left")
+        .sort(by="order")
+        .collect()
+    )
     edges.array(
         name="incremental_drainage_area",
         data=result.select(pl.col("incremental_drainage_area")).to_numpy().squeeze(),
     )
-    

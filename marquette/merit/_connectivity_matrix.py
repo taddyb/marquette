@@ -189,7 +189,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
 
     columns = [
         "STAID",
-        "STANAME",
+        # "STANAME",
         # "MERIT_ZONE",
         "HUC02",
         "DRAIN_SQKM",
