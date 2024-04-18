@@ -125,12 +125,16 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
     streamflow_predictions_root = zarr.open(
         Path(cfg.create_streamflow.predictions), mode="r"
     )
-    
+
     # Different merit forwards have different save outputs. Specifying here to handle the different versions
-    version = int(cfg.create_streamflow.version.lower().split("_v")[1][0]) # getting the version number
+    version = int(
+        cfg.create_streamflow.version.lower().split("_v")[1][0]
+    )  # getting the version number
     if version >= 3:
         log.info(msg="Reading Zarr Store")
-        zone_keys = [key for key in streamflow_predictions_root.keys() if str(cfg.zone) in key]
+        zone_keys = [
+            key for key in streamflow_predictions_root.keys() if str(cfg.zone) in key
+        ]
         zone_comids = []
         zone_runoff = []
         for key in zone_keys:
@@ -140,7 +144,7 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
         file_runoff = np.transpose(np.concatenate(zone_runoff))
         del zone_comids
         del zone_runoff
-    
+
     else:
         log.info("Reading Zarr Store")
         file_runoff = np.transpose(streamflow_predictions_root.Runoff)
