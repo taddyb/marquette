@@ -131,9 +131,7 @@ def create_sparse_MERIT_FLOW_TM(
         proportions = river_graph_len[col_indices] / total_length
         river_graph["comid_idx"].append(comid_idx)
         river_graph["edge_id_idx"].append(col_indices.tolist())
-        river_graph["values"].append(
-            proportions[0]
-        )  # The proportions should be idential, we only need to save one
+        river_graph["values"].extend(proportions.tolist())
     create_coo_data(river_graph, gage_coo_root)
 
 
