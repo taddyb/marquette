@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 
+import binsparse
 import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,6 +9,7 @@ import pandas as pd
 import xarray as xr
 import zarr
 from omegaconf import DictConfig
+from scipy import sparse
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
@@ -192,19 +194,27 @@ def create_MERIT_FLOW_TM(
         for idx, proportion in zip(indices, proportions):
             column_index = np.where(river_graph_ids == river_graph_ids[idx])[0][0]
             data_np[i][column_index] = proportion
-    data_array = xr.DataArray(
-        data=data_np,
-        dims=["COMID", "EDGEID"],  # Explicitly naming the dimensions
-        coords={"COMID": COMIDs, "EDGEID": river_graph_ids},  # Adding coordinates
-    )
-    xr_dataset = xr.Dataset(
-        data_vars={"TM": data_array},
-        attrs={"description": "MERIT -> Edge Transition Matrix"},
-    )
-    log.info("Writing MERIT TM to zarr store")
-    zarr_path = Path(cfg.create_TMs.MERIT.TM)
-    xr_dataset.to_zarr(zarr_path, mode="w")
-    # zarr_hierarchy = zarr.open_group(Path(cfg.create_TMs.MERIT.TM), mode="r")
+    
+    if cfg.create_TMs.MERIT.save_sparse:
+        log.info("Writing to sparse matrix")
+        gage_coo_root = zarr.open_group(Path(cfg.create_TMs.MERIT.TM), mode="a")
+        matrix = sparse.csr_matrix(data_np)
+        binsparse.write(gage_coo_root, "TM", matrix)
+        log.info("Sparse matrix written")
+    else:
+        data_array = xr.DataArray(
+            data=data_np,
+            dims=["COMID", "EDGEID"],  # Explicitly naming the dimensions
+            coords={"COMID": COMIDs, "EDGEID": river_graph_ids},  # Adding coordinates
+        )
+        xr_dataset = xr.Dataset(
+            data_vars={"TM": data_array},
+            attrs={"description": "MERIT -> Edge Transition Matrix"},
+        )
+        log.info("Writing MERIT TM to zarr store")
+        zarr_path = Path(cfg.create_TMs.MERIT.TM)
+        xr_dataset.to_zarr(zarr_path, mode="w")
+        # zarr_hierarchy = zarr.open_group(Path(cfg.create_TMs.MERIT.TM), mode="r")
 
 
 def join_geospatial_data(cfg: DictConfig) -> gpd.GeoDataFrame:

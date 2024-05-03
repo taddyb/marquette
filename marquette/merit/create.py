@@ -238,7 +238,7 @@ def create_TMs(cfg: DictConfig, edges: zarr.Group) -> None:
         log.info("MERIT -> FLOWLINE data already exists in zarr format")
     else:
         log.info("Creating MERIT -> FLOWLINE TM")
-        if cfg.create_TMs.MERIT.save_sparse:
-            create_sparse_MERIT_FLOW_TM(cfg, edges)
-        else:
-            create_MERIT_FLOW_TM(cfg, edges)
+        # if cfg.create_TMs.MERIT.save_sparse:
+        #     create_sparse_MERIT_FLOW_TM(cfg, edges)
+        # else:
+        create_MERIT_FLOW_TM(cfg, edges)
