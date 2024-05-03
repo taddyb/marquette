@@ -112,7 +112,6 @@ def create_sparse_MERIT_FLOW_TM(
     log.info("Using Edge COMIDs for TM")
     COMIDs = np.unique(edges.merit_basin[:])  # already sorted
     gage_coo_root = zarr.open_group(Path(cfg.create_TMs.MERIT.TM), mode="a")
-    zone_root = gage_coo_root.require_group(cfg.zone)
     merit_basin = edges.merit_basin[:]
     river_graph_len = edges.len[:]
     river_graph = {"values": [], "comid_idx": [], "edge_id_idx": []}
@@ -135,7 +134,7 @@ def create_sparse_MERIT_FLOW_TM(
         river_graph["values"].append(
             proportions[0]
         )  # The proportions should be idential, we only need to save one
-    create_coo_data(river_graph, zone_root)
+    create_coo_data(river_graph, gage_coo_root)
 
 
 def create_MERIT_FLOW_TM(
