@@ -1,6 +1,6 @@
 name: MERIT
 data_path: /projects/mhpi/data/${name}
-zone: 73
+zone: 74
 create_edges:
   buffer: 0.3334
   dx: 2000
@@ -19,7 +19,7 @@ create_N:
 create_TMs:
   MERIT:
     save_sparse: True
-    TM: ${data_path}/zarr/TMs/MERIT_FLOWLINES_${zone}
+    TM: ${data_path}/zarr/TMs/sparse_MERIT_FLOWLINES_${zone}
     shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
 create_streamflow:
   version: merit_conus_v3.0

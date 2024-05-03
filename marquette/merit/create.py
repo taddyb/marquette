@@ -31,6 +31,7 @@ from marquette.merit._streamflow_conversion_functions import (
 from marquette.merit._TM_calculations import (
     create_HUC_MERIT_TM,
     create_MERIT_FLOW_TM,
+    create_sparse_MERIT_FLOW_TM,
     join_geospatial_data,
 )
 
@@ -237,4 +238,7 @@ def create_TMs(cfg: DictConfig, edges: zarr.Group) -> None:
         log.info("MERIT -> FLOWLINE data already exists in zarr format")
     else:
         log.info("Creating MERIT -> FLOWLINE TM")
-        create_MERIT_FLOW_TM(cfg, edges)
+        if cfg.create_TMs.MERIT.save_sparse:
+            create_sparse_MERIT_FLOW_TM(cfg, edges)
+        else:
+            create_MERIT_FLOW_TM(cfg, edges)
