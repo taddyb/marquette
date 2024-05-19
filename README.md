@@ -6,6 +6,7 @@
 Marquette is a tool designed to format Hydrofabric data such that it can be used for [differentiable river routing](https://github.com/mhpi/dMC-dev). Currently the following hydrofabric inputs are supported:
 
 - [MERIT-BASINS](https://www.reachhydro.org/home/params/merit-basins)
+- Testing
 
 ## Citation:
 
