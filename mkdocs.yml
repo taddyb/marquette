@@ -2,6 +2,10 @@ site_name: Marquette
 site_url: https://taddyb.github.io/marquette
 theme:
   name: material
+  features:
+    - content.code.copy
+    - content.code.select
+    - content.code.annotate
 
 repo_name: Marquette
 repo_url: https://github.com/taddyb/marquette
@@ -12,6 +16,12 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.arithmatex:
       generic: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
 
 extra_javascript:
   - javascripts/katex.js
