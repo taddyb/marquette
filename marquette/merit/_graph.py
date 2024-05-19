@@ -11,6 +11,8 @@ log = logging.getLogger(__name__)
 
 
 class Edge:
+    """A class to represent an edge in a river network."""
+
     def __init__(self, segment, up=None, ds=None, edge_id=None):
         self.id = edge_id
         self.merit_basin = segment.id
@@ -31,11 +33,12 @@ class Edge:
         self.segment = segment
 
     def convert_coords_to_wgs84(self):
+        """Converts gdf coordinates to WGS84."""
         coords = self.coords
         source_crs = "EPSG:32618"
         target_crs = "EPSG:4326"  # WGS84
-        gdf = gpd.GeoDataFrame(geometry=[Point(coord) for coord in coords], crs=source_crs)
-        gdf = gdf.to_crs(target_crs)
+        gdf: gpd.GeoDataFrame = gpd.GeoDataFrame(geometry=[Point(coord) for coord in coords], crs=source_crs) # type: ignore
+        gdf = gdf.to_crs(target_crs) # type: ignore
         self.coords = [(point.x, point.y) for point in gdf.geometry]
 
     def calculate_sinuosity(self, curve_length):

@@ -231,14 +231,16 @@ def create_gage_connectivity(
         it explores the upstream flowlines, constructing a graph structure that includes
         information about each node and its upstream connections.
 
-        Parameters:
+        Parameters
+        ----------
         id_ (str): The identifier of the starting node in the river graph.
         idx (int): The index of the starting node in the 'merit_flowlines' dataset.
         merit_flowlines (zarr.Group): A Zarr group containing river flowline data.
                                       Expected to have 'up' and 'id' arrays for upstream connections
                                       and node identifiers, respectively.
 
-        Returns:
+        Returns
+        -------
         dict: A dictionary representing the traversed river graph. It contains three keys:
               'ID' - a list of node identifiers,
               'ds' - a list of indices corresponding to the downstream node for each ID,
@@ -289,12 +291,14 @@ def create_gage_connectivity(
         to create a list of pairs representing connections in the graph. These pairs are then
         stored in a Zarr dataset within a group specific to a gage, identified by 'padded_gage_id'.
 
-        Parameters:
+        Parameters
+        ----------
         gage_output: The output from a river graph traversal, containing 'ds' and 'up' keys.
         padded_gage_id (str): The identifier for the gage, used to create a specific group in Zarr.
         root (zarr.Group): The root Zarr group where the dataset will be stored.
 
-        Returns:
+        Returns
+        -------
         List[Tuple[Any, Any]]: A list of tuples, each representing a pair of connected nodes in the graph.
         """
         pairs = format_pairs(gage_output)
@@ -336,15 +340,16 @@ def new_zone_connectivity(
 ) -> None:
     def find_connection(edges: zarr.Group, mapping: dict) -> dict:
         """
-        Performs a traversal on a graph of river flowlines, represented by a NumPy array of edges.
-        This function iterates over each edge and explores its upstream connections, constructing a graph structure.
+        Performs a traversal on a graph of river flowlines, represented by a NumPy array of edges. This function iterates over each edge and explores its upstream connections, constructing a graph structure.
 
-        Parameters:
+        Parameters
+        ----------
         gage_id (str): Identifier for the gage being processed.
         edges (np.ndarray): A NumPy array containing river flowline data. Each element is expected to have 'id' and 'up' attributes.
         mapping (dict): A dictionary mapping node IDs to their indices in the edges array.
 
-        Returns:
+        Returns
+        -------
         dict: A dictionary representing the traversed river graph for each edge. It contains three keys:
               'ID' - a list of node identifiers,
               'idx' - a list of indices corresponding to the nodes,
@@ -352,7 +357,7 @@ def new_zone_connectivity(
         """
         river_graph = {"ds": [], "up": []}
         for idx in tqdm(
-            range(edges.id.shape[0]),
+            range(edges.id.shape[0]), # type: ignore
             desc="Looping through edges",
             ascii=True,
             ncols=140,
@@ -360,7 +365,7 @@ def new_zone_connectivity(
             river_graph["ds"].append(idx)
 
             # Decode upstream ids and convert to indices
-            upstream_ids = ast.literal_eval(edges.up[idx])
+            upstream_ids = ast.literal_eval(edges.up[idx]) # type: ignore
             if len(upstream_ids) == 0:
                 river_graph["up"].append([None])
             else:

@@ -13,24 +13,29 @@ from tqdm import tqdm
 log = logging.getLogger(__name__)
 
 
-def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.GeoDataFrame) -> None:
+def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.Group, gdf: pd.DataFrame) -> None:
     """
     Create a Transfer Matrix (TM) from GeoDataFrame.
 
-    Args:
-        cfg (DictConfig): Hydra configuration object containing settings.
-        gdf (GeoDataFrame): GeoDataFrame containing geographical data.
+    Parameters
+    ----------
+    cfg : DictConfig
+        Hydra configuration object containing settings.
+    edges : zarr.Group
+        Zarr group containing edge data.
+    gdf : GeoDataFrame
+        GeoDataFrame containing geographical data.
     """
     gdf = gdf.dropna(subset=["HUC10"])
     huc10_ids = gdf["HUC10"].unique()
     huc10_ids.sort()
-    merit_ids = np.unique(edges.merit_basin[:])  # already sorted
+    merit_ids = np.unique(edges.merit_basin[:])  # type: ignore # already sorted
     data_array = xr.DataArray(
         np.zeros((len(huc10_ids), len(merit_ids))),
         dims=["HUC10", "COMID"],
         coords={"HUC10": huc10_ids, "COMID": merit_ids},
     )
-    for idx, huc_id in enumerate(
+    for _, huc_id in enumerate(
         tqdm(
             huc10_ids,
             desc="creating TM",
@@ -41,7 +46,7 @@ def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.G
         merit_basins = gdf[gdf["HUC10"] == str(huc_id)]
         total_area = merit_basins.iloc[0]["area_new"]
 
-        for j, basin in merit_basins.iterrows():
+        for _, basin in merit_basins.iterrows():
             unit_area = basin.unitarea / total_area
             data_array.loc[huc_id, basin.COMID] = unit_area
     xr_dataset = xr.Dataset(
@@ -54,26 +59,19 @@ def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.G
     xr_dataset.to_zarr(zarr_path, mode="w")
 
 
-def create_MERIT_FLOW_TM(cfg: DictConfig, edges: zarr.hierarchy.Group) -> zarr.hierarchy.Group:
+def create_MERIT_FLOW_TM(cfg: DictConfig, edges: zarr.Group) -> None:
     """
-    Creating a TM that maps MERIT basins to their reaches. Flow predictions are distributed
-    based on reach length/ total merit reach length
-    :param cfg:
-    :param edges:
-    :param huc_to_merit_TM:
-    :return:
+    Creating a TM that maps MERIT basins to their reaches. Flow predictions are distributed based on reach length/ total merit reach length
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        Hydra configuration object containing settings.
+    edges : zarr.Group
+        Zarr group containing edge data.
     """
-    # if cfg.create_TMs.MERIT.use_streamflow:
-    #     log.info("Using Streamflow COMIDs for TM")
-    #     streamflow_predictions_root = zarr.open(
-    #         Path(cfg.create_streamflow.predictions), mode="r"
-    #     )
-    #     comids: np.ndarray = streamflow_predictions_root.COMID[:]
-    #     sorted_indices = np.argsort(comids)
-    #     COMIDs = comids[sorted_indices].astype(int)
-    # else:
     log.info("Using Edge COMIDs for TM")
-    COMIDs = np.unique(edges.merit_basin[:])  # already sorted
+    COMIDs = np.unique(edges.merit_basin[:])  # type: ignore # already sorted
     river_graph_ids = edges.id[:]
     merit_basin = edges.merit_basin[:]
     river_graph_len = edges.len[:]
@@ -101,12 +99,12 @@ def create_MERIT_FLOW_TM(cfg: DictConfig, edges: zarr.hierarchy.Group) -> zarr.h
     ):
         indices = np.where(merit_basin == basin_id)[0]
 
-        total_length = np.sum(river_graph_len[indices])
+        total_length = np.sum(river_graph_len[indices]) # type: ignore
         if total_length == 0:
             print("Basin not found:", basin_id)
             continue
         proportions = river_graph_len[indices] / total_length
-        for idx, proportion in zip(indices, proportions):
+        for idx, proportion in zip(indices, proportions, strict=False):
             column_index = np.where(river_graph_ids == river_graph_ids[idx])[0][0]
             data_np[i][column_index] = proportion
     data_array = xr.DataArray(
@@ -124,15 +122,19 @@ def create_MERIT_FLOW_TM(cfg: DictConfig, edges: zarr.hierarchy.Group) -> zarr.h
     # zarr_hierarchy = zarr.open_group(Path(cfg.create_TMs.MERIT.TM), mode="r")
 
 
-def join_geospatial_data(cfg: DictConfig) -> gpd.GeoDataFrame:
+def join_geospatial_data(cfg: DictConfig) -> pd.DataFrame:
     """
     Joins two geospatial datasets based on the intersection of centroids of one dataset with the geometries of the other.
 
-    Args:
-    huc10_path (str): File path to the HUC10 shapefile.
-    basins_path (str): File path to the basins shapefile.
+    Parameters
+    ----------
+    huc10_path : str
+        File path to the HUC10 shapefile.
+    basins_path : str
+        File path to the basins shapefile.
 
-    Returns:
+    Returns
+    -------
     gpd.GeoDataFrame: The resulting joined GeoDataFrame.
     """
     huc10_gdf = gpd.read_file(Path(cfg.create_TMs.HUC.shp_files)).to_crs(epsg=4326)
@@ -144,7 +146,7 @@ def join_geospatial_data(cfg: DictConfig) -> gpd.GeoDataFrame:
         how="left",
         predicate="intersects",
     )
-    joined_gdf.set_geometry("geometry", inplace=True)
+    joined_gdf.set_geometry("geometry", inplace=True) # type: ignore
     return joined_gdf
 
 

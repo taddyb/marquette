@@ -12,66 +12,26 @@ from tqdm import tqdm
 log = logging.getLogger(__name__)
 
 
-# class Direction(Enum):
-#     up = "up"
-#     down = "down"
-
-
-# def traverse(df: pl.DataFrame, direction: Direction, count=1):
-# TODO: Get this to work
-#     if direction == Direction.up:
-#         # Using only the up1 dir as we know it always exists
-#         _traverse = "up1"
-#         renamed_col = "NextDownID"
-#     elif direction == Direction.down:
-#         _traverse = "NextDownID"
-#         renamed_col = "up1"
-#     else:
-#         raise ValueError("Invalid direction. Look at the Direction Enum")
-#     traverse_df = df.clone()
-#     for _ in range(count):
-#         traverse_df = traverse_df.rename(
-#             {"COMID": "_COMID"}
-#         ).with_columns(
-#             pl.when(pl.col(_traverse) == 0)
-#             .then(pl.col("_COMID"))
-#             .otherwise(pl.col(renamed_col))
-#             .alias("COMID")
-#         )
-#         traverse_df = df.join(other=traverse_df, on="COMID", how="semi", join_nulls=True)
-#         traverse_df = traverse_df.drop("_COMID")
-#     return traverse_df
-
-
-# def spatial_nan_filter(
-#     df: pl.DataFrame,
-# ) -> pl.DataFrame:
-#     """
-#     Filling NaN values based on the predictions up or downstream
-#     Using the min value of the attribute is no Up or Downstream values are available
-#     """
-#     # TODO: Get this to work
-#     if df.null_count().to_numpy().sum() == 0:
-#         return df
-#     else:
-#         filled_df = traverse(
-#             df, Direction.down, count=3
-#         )
-#         if df.null_count().to_numpy().sum():
-#             filled_df = traverse(
-#                 filled_df, Direction.up
-#             )
-#             if np.isnan(fill_value):
-#                 fill_value = np.nanmin(df[attribute])
-#             nan_fill[i] = fill_value
-#         _attr_mapped[mask] = nan_fill
-#         return _attr_mapped
-
-
 def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
+    """Creates soils data attributes for the edges based on a provided shapefile
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The configuration object.
+    edges : zarr.Group
+        The zarr group object containing the edge data.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the soils data file is not found.
+    """
     flowline_file = (
         Path(cfg.data_path) / f"raw/routing_soil_properties/riv_pfaf_{cfg.zone}_buff_split_soil_properties.shp"
     )
+    if flowline_file.exists() is False:
+        raise FileNotFoundError("Soils data not found")
     polyline_gdf = gpd.read_file(flowline_file)
     gdf = pd.DataFrame(polyline_gdf.drop(columns="geometry"))
     df = pl.from_pandas(gdf)
@@ -124,6 +84,24 @@ def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
 
 
 def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
+    """Creates PET data attributes for the edges based on a provided shapefile
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The configuration object.
+    edges : zarr.Group
+        The zarr group object containing the edge data.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the PET data file is not found.
+    ValueError
+        There is a mismatch in the number of comids in the data and the edge_merit_basins array.
+    ValueError
+        There is a mismatch in the number of timesteps in the data and the num_timesteps variable.
+    """
     pet_file_path = Path(f"/projects/mhpi/data/global/zarr_sub_zone/{cfg.zone}")
     num_timesteps = pd.date_range(
         start=cfg.create_streamflow.start_date,
@@ -132,7 +110,7 @@ def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
     ).shape[0]
     if pet_file_path.exists() is False:
         raise FileNotFoundError("PET forcing data not found")
-    edge_merit_basins: np.ndarray = edges.merit_basin[:]
+    edge_merit_basins: np.ndarray = edges.merit_basin[:] # type: ignore
     pet_edge_data = []
     pet_comid_data = []
     mapping = np.empty_like(edge_merit_basins, dtype=int)
@@ -165,19 +143,33 @@ def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
 def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
     """
     Pulling Data from the global_dhbv_static_inputs data and storing it in a zarr store
-    All attrs are as follows:
-    attributeLst = ['area','ETPOT_Hargr', 'FW', 'HWSD_clay', 'HWSD_gravel', 'HWSD_sand',
-       'HWSD_silt', 'NDVI', 'Porosity', 'SoilGrids1km_clay',
-       'SoilGrids1km_sand', 'SoilGrids1km_silt', 'T_clay', 'T_gravel',
-       'T_sand', 'T_silt', 'aridity', 'glaciers', 'meanP', 'meanTa',
-       'meanelevation', 'meanslope', 'permafrost', 'permeability',
-       'seasonality_P', 'seasonality_PET', 'snow_fraction',
-       'snowfall_fraction']
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The configuration object.
+    edges : zarr.Group
+        The zarr group object containing the edge data.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the global_dhbv_static_inputs data is not found.
+    ValueError
+        If the data is not consistent. Check the number of comids in the data and the edge_merit_basins array.
     """
+#     Attributes in the provided file are as follows:
+#     ['area','ETPOT_Hargr', 'FW', 'HWSD_clay', 'HWSD_gravel', 'HWSD_sand',
+#    'HWSD_silt', 'NDVI', 'Porosity', 'SoilGrids1km_clay',
+#    'SoilGrids1km_sand', 'SoilGrids1km_silt', 'T_clay', 'T_gravel',
+#    'T_sand', 'T_silt', 'aridity', 'glaciers', 'meanP', 'meanTa',
+#    'meanelevation', 'meanslope', 'permafrost', 'permeability',
+#    'seasonality_P', 'seasonality_PET', 'snow_fraction',
+#    'snowfall_fraction']
     file_path = Path(f"/projects/mhpi/data/global/zarr_sub_zone/{cfg.zone}")
     if file_path.exists() is False:
         raise FileNotFoundError("global_dhbv_static_inputs data not found")
-    edge_merit_basins: np.ndarray = edges.merit_basin[:]
+    edge_merit_basins: np.ndarray = edges.merit_basin[:] # type: ignore
     comid_data = []
     aridity_data = []
     porosity_data = []
@@ -228,6 +220,18 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
 def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> None:
     """
     Runs a Polars query to calculate the incremental drainage area for each edge in the MERIT dataset
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The configuration object.
+    edges : zarr.Group
+        The zarr group object containing the edge data.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the basin file is not found.
     """
     basin_file = Path(cfg.data_path) / f"raw/basins/cat_pfaf_{cfg.zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp"
     if basin_file.exists() is False:
@@ -239,7 +243,7 @@ def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> N
         {
             "COMID": edges.merit_basin[:],
             "id": edges.id[:],
-            "order": np.arange(edges.id.shape[0]),
+            "order": np.arange(edges.id.shape[0]), # type: ignore
         }
     )
 

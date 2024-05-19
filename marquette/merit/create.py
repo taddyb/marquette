@@ -38,8 +38,17 @@ log = logging.getLogger(__name__)
 
 
 def write_streamflow(cfg: DictConfig, edges: zarr.Group) -> None:
-    """
-    Process and write streamflow data to a Zarr store.
+    """A function used to write the streamflow data to zarr format and convert from mm/day to m3/s
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The confuguration object.
+
+    Returns
+    -------
+    zarr.Group
+        The zarr group object containing the edge data.
     """
     streamflow_path = Path(cfg.create_streamflow.data_store)
     version = cfg.create_streamflow.version.lower()
@@ -59,6 +68,18 @@ def write_streamflow(cfg: DictConfig, edges: zarr.Group) -> None:
 
 
 def create_edges(cfg: DictConfig) -> zarr.Group:
+    """A function used to create the edges for the MERIT dataset.
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The confuguration object.
+
+    Returns
+    -------
+    zarr.Group
+        The zarr group object containing the edge data.
+    """
     root = zarr.open_group(Path(cfg.create_edges.edges), mode="a")
     group_name = f"{cfg.zone}"
     if group_name in root:
@@ -195,6 +216,15 @@ def create_edges(cfg: DictConfig) -> zarr.Group:
 
 
 def create_N(cfg: DictConfig, edges: zarr.Group) -> None:
+    """Creating the adjacency matrix of river connection data
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The configuration object
+    edges : zarr.Group
+        The zarr group object containing edge data.
+    """
     gage_coo_root = zarr.open_group(Path(cfg.create_N.gage_coo_indices), mode="a")
     zone_root = gage_coo_root.require_group(cfg.zone)
     if cfg.create_N.run_whole_zone:
@@ -216,6 +246,15 @@ def create_N(cfg: DictConfig, edges: zarr.Group) -> None:
 
 
 def create_TMs(cfg: DictConfig, edges: zarr.Group) -> None:
+    """Creating Transformation Matrices to map data from courser to finer resolution
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The configuration object
+    edges : zarr.Group
+        The zarr group object containing edge data.
+    """
     if "HUC" in cfg.create_TMs:
         huc_to_merit_path = Path(cfg.create_TMs.HUC.TM)
         if huc_to_merit_path.exists():

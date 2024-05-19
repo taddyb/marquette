@@ -1,4 +1,5 @@
 import logging
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -12,6 +13,14 @@ log = logging.getLogger(__name__)
 
 
 def calculate_huc10_flow_from_individual_files(cfg: DictConfig) -> None:
+    """Converts huc10 flow from the provided indivudual files to m3/s and saves to zarr
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The configuration object.
+    """
+    warnings.warn("This function is deprecated and will be removed in a future version.", DeprecationWarning, stacklevel=2)
     qr_folder = Path(cfg.create_streamflow.predictions)
     streamflow_files_path = qr_folder / "basin_split/"
 
@@ -21,8 +30,8 @@ def calculate_huc10_flow_from_individual_files(cfg: DictConfig) -> None:
     )  # Left padding a 0 to make sure that all gages can be read
     id_to_area = attrs_df.set_index("gage_ID")["area"].to_dict()
 
-    huc_to_merit_TM = zarr.open(Path(cfg.create_TMs.HUC.TM), mode="r")
-    huc_10_list = huc_to_merit_TM.HUC10[:]
+    huc_to_merit_TM = zarr.open(Path(cfg.create_TMs.HUC.TM).__str__(), mode="r")
+    huc_10_list = huc_to_merit_TM.HUC10[:] # type: ignore
     date_range = pd.date_range(
         start=cfg.create_streamflow.start_date,
         end=cfg.create_streamflow.end_date,
@@ -66,11 +75,14 @@ def calculate_huc10_flow_from_individual_files(cfg: DictConfig) -> None:
 
 
 def separate_basins(cfg: DictConfig) -> None:
+    """Code provided by Yalan Song to separate the basin predictions into individual files
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The configuration object.
     """
-    Code provided by Yalan Song
-    :param cfg:
-    :return:
-    """
+    warnings.warn("This function is deprecated and will be removed in a future version.", DeprecationWarning, stacklevel=2)
     qr_folder = Path(cfg.create_streamflow.predictions)
     data_split_folder = qr_folder / "basin_split/"
     if data_split_folder.exists() is False:
@@ -110,13 +122,27 @@ def separate_basins(cfg: DictConfig) -> None:
                 np.save(data_split_folder / f"{formatted_id}.npy", qr)
 
 
-def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
+def calculate_merit_flow(cfg: DictConfig, edges: zarr.Group) -> None:
+    """Calculates the flow for the MERIT dataset, converts to m3/s, and saves it to zarr
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        _description_
+    edges : zarr.Group
+        _description_
+
+    Raises
+    ------
+    KeyError
+        Cannot find the specified COMID within the defined Areas
+    """
     attrs_df = pd.read_csv(Path(cfg.create_streamflow.obs_attributes) / f"COMID_{str(cfg.zone)[0]}.csv")
     id_to_area = attrs_df.set_index("COMID")["unitarea"].to_dict()
 
-    edge_comids = np.unique(edges.merit_basin[:])  # already sorted
+    edge_comids = np.unique(edges.merit_basin[:])  # type: ignore # already sorted
 
-    streamflow_predictions_root = zarr.open(Path(cfg.create_streamflow.predictions), mode="r")
+    streamflow_predictions_root: zarr.array = zarr.open(Path(cfg.create_streamflow.predictions).__str__(), mode="r") # type: ignore
 
     # Different merit forwards have different save outputs. Specifying here to handle the different versions
     version = int(cfg.create_streamflow.version.lower().split("_v")[1][0])  # getting the version number
@@ -135,9 +161,9 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
 
     else:
         log.info("Reading Zarr Store")
-        file_runoff = np.transpose(streamflow_predictions_root.Runoff)
+        file_runoff = np.transpose(streamflow_predictions_root.Runoff) # type: ignore
 
-        streamflow_comids: np.ndarray = streamflow_predictions_root.COMID[:].astype(int)
+        streamflow_comids: np.ndarray = streamflow_predictions_root.COMID[:].astype(int) # type: ignore
 
     log.info("Mapping predictions to zone COMIDs")
     runoff_full_zone = np.zeros((file_runoff.shape[0], edge_comids.shape[0]))

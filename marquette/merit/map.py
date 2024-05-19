@@ -3,7 +3,6 @@
 import logging
 import multiprocessing
 from pathlib import Path
-from typing import List
 
 import geopandas as gpd
 import numpy as np
@@ -23,6 +22,13 @@ log = logging.getLogger(__name__)
 
 
 def _plot_gdf(gdf: gpd.GeoDataFrame) -> None:
+    """Plots a gdf (used in debugging)
+
+    Parameters
+    ----------
+    gdf : gpd.GeoDataFrame
+        A GeoDataFrame of interest
+    """
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(10, 10))
@@ -33,47 +39,59 @@ def _plot_gdf(gdf: gpd.GeoDataFrame) -> None:
     plt.show()
 
 
-def create_graph(cfg):
-    flowline_file = cfg.save_paths.flow_lines
-    polyline_gdf = gpd.read_file(flowline_file)
+# def create_graph(cfg: DictConfig):
+#     """Creates a river connectivity graph using MERIT Hydro data
 
-    # Convert multiple columns to int type
-    for col in [
-        "COMID",
-        "NextDownID",
-        "up1",
-        "up2",
-        "up3",
-        "up4",
-        "maxup",
-        "order_",
-    ]:
-        polyline_gdf[col] = polyline_gdf[col].astype(int)
+#     Parameters
+#     ----------
+#     cfg : _type_
+#         _description_
 
-    crs = polyline_gdf.crs
+#     Returns
+#     -------
+#     _type_
+#         _description_
+#     """
+#     flowline_file = cfg.save_paths.flow_lines
+#     polyline_gdf = gpd.read_file(flowline_file)
 
-    # Generate segments using list comprehension
-    segments = [Segment(row, row.geometry, crs) for _, row in polyline_gdf.iterrows()]
+#     # Convert multiple columns to int type
+#     for col in [
+#         "COMID",
+#         "NextDownID",
+#         "up1",
+#         "up2",
+#         "up3",
+#         "up4",
+#         "maxup",
+#         "order_",
+#     ]:
+#         polyline_gdf[col] = polyline_gdf[col].astype(int)
 
-    dx = cfg.dx  # Unit: Meters
-    buffer = cfg.buffer * dx  # Unit: Meters
-    sorted_segments = sorted(segments, key=lambda segment: segment.uparea, reverse=False)
-    segment_das = {segment.id: segment.uparea for segment in segments}  # Simplified with dict comprehension
-    edge_counts = get_edge_counts(sorted_segments, dx, buffer)
-    edges_ = [
-        edge
-        for segment in tqdm(
-            sorted_segments,
-            desc="Processing segments",
-            ncols=140,
-            ascii=True,
-        )
-        for edge in segments_to_edges(segment, edge_counts, segment_das)  # returns many edges
-    ]
-    edges = data_to_csv(edges_)
-    edges.to_csv(cfg.csv.edges, index=False, compression="gzip")
+#     crs = polyline_gdf.crs
 
-    return edges
+#     # Generate segments using list comprehension
+#     segments = [Segment(row, row.geometry, crs) for _, row in polyline_gdf.iterrows()]
+
+#     dx = cfg.dx  # Unit: Meters
+#     buffer = cfg.buffer * dx  # Unit: Meters
+#     sorted_segments = sorted(segments, key=lambda segment: segment.uparea, reverse=False)
+#     segment_das = {segment.id: segment.uparea for segment in segments}  # Simplified with dict comprehension
+#     edge_counts = get_edge_counts(sorted_segments, dx, buffer)
+#     edges_ = [
+#         edge
+#         for segment in tqdm(
+#             sorted_segments,
+#             desc="Processing segments",
+#             ncols=140,
+#             ascii=True,
+#         )
+#         for edge in segments_to_edges(segment, edge_counts, segment_das)  # returns many edges
+#     ]
+#     edges = data_to_csv(edges_)
+#     edges.to_csv(cfg.csv.edges, index=False, compression="gzip")
+
+#     return edges
 
 
 def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
