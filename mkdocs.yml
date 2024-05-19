@@ -1,4 +1,12 @@
-site_name: My site
-site_url: https://mydomain.org/mysite
+site_name: Marquette
+site_url: https://taddyb.github.io/marquette
 theme:
-  name: readthedocs
+  name: material
+
+repo_name: Marquette
+repo_url: https://github.com/taddyb/marquette
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
