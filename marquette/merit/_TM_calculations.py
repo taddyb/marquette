@@ -13,9 +13,7 @@ from tqdm import tqdm
 log = logging.getLogger(__name__)
 
 
-def create_HUC_MERIT_TM(
-    cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.GeoDataFrame
-) -> None:
+def create_HUC_MERIT_TM(cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.GeoDataFrame) -> None:
     """
     Create a Transfer Matrix (TM) from GeoDataFrame.
 
@@ -56,9 +54,7 @@ def create_HUC_MERIT_TM(
     xr_dataset.to_zarr(zarr_path, mode="w")
 
 
-def create_MERIT_FLOW_TM(
-    cfg: DictConfig, edges: zarr.hierarchy.Group
-) -> zarr.hierarchy.Group:
+def create_MERIT_FLOW_TM(cfg: DictConfig, edges: zarr.hierarchy.Group) -> zarr.hierarchy.Group:
     """
     Creating a TM that maps MERIT basins to their reaches. Flow predictions are distributed
     based on reach length/ total merit reach length

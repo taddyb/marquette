@@ -34,9 +34,7 @@ class Edge:
         coords = self.coords
         source_crs = "EPSG:32618"
         target_crs = "EPSG:4326"  # WGS84
-        gdf = gpd.GeoDataFrame(
-            geometry=[Point(coord) for coord in coords], crs=source_crs
-        )
+        gdf = gpd.GeoDataFrame(geometry=[Point(coord) for coord in coords], crs=source_crs)
         gdf = gdf.to_crs(target_crs)
         self.coords = [(point.x, point.y) for point in gdf.geometry]
 
@@ -162,11 +160,7 @@ def get_edge_counts(segments, dx, buffer):
             if segment.coords.geom_type == "MultiLineString":
                 multiline = MultiLineString(segment.coords)
                 # Create a list of points from all LineStrings in the MultiLineString
-                points_list = [
-                    point
-                    for linestring in multiline.geoms
-                    for point in linestring.coords
-                ]
+                points_list = [point for linestring in multiline.geoms for point in linestring.coords]
                 # Convert points to a single line
                 line = LineString(points_list)
         source_crs = segment.crs
@@ -236,14 +230,12 @@ def segments_to_edges(segment, edge_counts, segment_das):
             ds=f"{segment.ds}_0",
             edge_id=f"{segment.id}_{0}",
         )
-        edge.coords = list(
-            segment.transformed_line.interpolate(segment.edge_len * num_edges).coords
-        ) + [segment.transformed_line.coords[-1]]
+        edge.coords = list(segment.transformed_line.interpolate(segment.edge_len * num_edges).coords) + [
+            segment.transformed_line.coords[-1]
+        ]
         edge.len = segment.edge_len
         edge.calculate_sinuosity(edge.len)
-        edge.len_dir = (
-            segment.edge_len / edge.sinuosity
-        )  # This is FAKE as we're setting the len manually
+        edge.len_dir = segment.edge_len / edge.sinuosity  # This is FAKE as we're setting the len manually
         edge.calculate_drainage_area(-1, segment_das)
         edges.append(edge)
     else:
@@ -261,14 +253,10 @@ def segments_to_edges(segment, edge_counts, segment_das):
                 edge = Edge(
                     segment,
                     up=[f"{segment.id}_{i - 1}"],
-                    ds=f"{segment.id}_{i + 1}"
-                    if i < num_edges - 1
-                    else f"{segment.ds}_0",
+                    ds=f"{segment.id}_{i + 1}" if i < num_edges - 1 else f"{segment.ds}_0",
                     edge_id=f"{segment.id}_{i}",
                 )
-            edge.coords = list(
-                segment.transformed_line.interpolate(segment.edge_len * i).coords
-            ) + list(
+            edge.coords = list(segment.transformed_line.interpolate(segment.edge_len * i).coords) + list(
                 segment.transformed_line.interpolate(segment.edge_len * (i + 1)).coords
             )
             edge.len = segment.edge_len

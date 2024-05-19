@@ -16,9 +16,10 @@ def main(cfg: DictConfig) -> None:
     """
     Main function for running experiments.
 
-    :param cfg: Configuration object.
-    :type cfg: DictConfig
-    :return: None
+    Parameters
+    ----------
+    cfg : DictConfig
+        Configuration object.
     """
     if cfg.name.lower() == "hydrofabric":
         raise ImportError("Hydrofabric functionality not yet supported")
@@ -56,9 +57,12 @@ def run_extensions(cfg, edges):
     """
     The function for running post-processing data extensions
 
-    :param cfg: Configuration object.
-    :type cfg: DictConfig
-    :return: None
+    Parameters
+    ----------
+    cfg : DictConfig
+        Configuration object.
+    edges : zarr.Group
+        Zarr group object containing edge data.
     """
     if "soils_data" in cfg.extensions:
         from marquette.merit.extensions import soils_data

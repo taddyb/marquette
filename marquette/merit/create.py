@@ -80,16 +80,10 @@ def create_edges(cfg: DictConfig) -> zarr.Group:
             "order",
         ]:
             polyline_gdf[col] = polyline_gdf[col].astype(int)
-        computed_series = polyline_gdf.apply(
-            lambda df: create_segment(df, polyline_gdf.crs, dx, buffer), axis=1
-        )
+        computed_series = polyline_gdf.apply(lambda df: create_segment(df, polyline_gdf.crs, dx, buffer), axis=1)
         segments_dict = computed_series.to_dict()
-        segment_das = {
-            segment["id"]: segment["uparea"] for segment in segments_dict.values()
-        }
-        sorted_keys = sorted(
-            segments_dict, key=lambda key: segments_dict[key]["uparea"]
-        )
+        segment_das = {segment["id"]: segment["uparea"] for segment in segments_dict.values()}
+        sorted_keys = sorted(segments_dict, key=lambda key: segments_dict[key]["uparea"])
         num_edges_dict = {
             _segment["id"]: calculate_num_edges(_segment["len"], dx, buffer)
             for _, _segment in tqdm(
@@ -133,9 +127,7 @@ def create_edges(cfg: DictConfig) -> zarr.Group:
                 print(f"MISSING ID: {segment_id}")
 
         df_one = pd.DataFrame.from_dict(segments_with_one_edge, orient="index")
-        df_many = pd.DataFrame.from_dict(
-            segments_with_more_than_one_edge, orient="index"
-        )
+        df_many = pd.DataFrame.from_dict(segments_with_more_than_one_edge, orient="index")
         ddf_one = from_pandas(df_one, npartitions=64)
         ddf_many = from_pandas(df_many, npartitions=64)
 

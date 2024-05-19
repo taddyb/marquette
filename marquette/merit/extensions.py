@@ -70,8 +70,7 @@ log = logging.getLogger(__name__)
 
 def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
     flowline_file = (
-        Path(cfg.data_path)
-        / f"raw/routing_soil_properties/riv_pfaf_{cfg.zone}_buff_split_soil_properties.shp"
+        Path(cfg.data_path) / f"raw/routing_soil_properties/riv_pfaf_{cfg.zone}_buff_split_soil_properties.shp"
     )
     polyline_gdf = gpd.read_file(flowline_file)
     gdf = pd.DataFrame(polyline_gdf.drop(columns="geometry"))
@@ -109,11 +108,7 @@ def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
     )
     df_filled = df_filled.with_columns(
         pl.when(pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]).is_null())
-        .then(
-            pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]).fill_null(
-                strategy="forward"
-            )
-        )
+        .then(pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]).fill_null(strategy="forward"))
         .otherwise(pl.col(["OM_05_M_25", "Cl_05_Mn", "Sd_05_Mn", "St_05_Mn"]))
     )
     graph_cols = ["COMID", "up1", "NextDownID"]
@@ -234,10 +229,7 @@ def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> N
     """
     Runs a Polars query to calculate the incremental drainage area for each edge in the MERIT dataset
     """
-    basin_file = (
-        Path(cfg.data_path)
-        / f"raw/basins/cat_pfaf_{cfg.zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp"
-    )
+    basin_file = Path(cfg.data_path) / f"raw/basins/cat_pfaf_{cfg.zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp"
     if basin_file.exists() is False:
         raise FileNotFoundError("Basin file not found")
     gdf = gpd.read_file(basin_file)
@@ -261,8 +253,7 @@ def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> N
             [
                 pl.map_groups(
                     exprs=["unitarea", pl.first("unitarea")],
-                    function=lambda list_of_series: list_of_series[1]
-                    / list_of_series[0].shape[0],
+                    function=lambda list_of_series: list_of_series[1] / list_of_series[0].shape[0],
                 ).alias("incremental_drainage_area")
             ]
         )

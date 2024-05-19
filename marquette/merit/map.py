@@ -57,12 +57,8 @@ def create_graph(cfg):
 
     dx = cfg.dx  # Unit: Meters
     buffer = cfg.buffer * dx  # Unit: Meters
-    sorted_segments = sorted(
-        segments, key=lambda segment: segment.uparea, reverse=False
-    )
-    segment_das = {
-        segment.id: segment.uparea for segment in segments
-    }  # Simplified with dict comprehension
+    sorted_segments = sorted(segments, key=lambda segment: segment.uparea, reverse=False)
+    segment_das = {segment.id: segment.uparea for segment in segments}  # Simplified with dict comprehension
     edge_counts = get_edge_counts(sorted_segments, dx, buffer)
     edges_ = [
         edge
@@ -72,9 +68,7 @@ def create_graph(cfg):
             ncols=140,
             ascii=True,
         )
-        for edge in segments_to_edges(
-            segment, edge_counts, segment_das
-        )  # returns many edges
+        for edge in segments_to_edges(segment, edge_counts, segment_das)  # returns many edges
     ]
     edges = data_to_csv(edges_)
     edges.to_csv(cfg.csv.edges, index=False, compression="gzip")
@@ -107,13 +101,8 @@ def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
     log.info("Reading streamflow predictions")
     streamflow_predictions = _read_flow(cfg, huc_10_list)
     streamflow_predictions["dates"] = pd.to_datetime(streamflow_predictions["dates"])
-    grouped_predictions = streamflow_predictions.groupby(
-        streamflow_predictions["dates"].dt.year
-    )
-    args_iter = (
-        (cfg, group, hm_TM.copy(), mrg_TM.copy(), columns)
-        for group in grouped_predictions
-    )
+    grouped_predictions = streamflow_predictions.groupby(streamflow_predictions["dates"].dt.year)
+    args_iter = ((cfg, group, hm_TM.copy(), mrg_TM.copy(), columns) for group in grouped_predictions)
     with multiprocessing.Pool(cfg.num_cores) as pool:
         log.info("Writing Process to disk")
         pool.map(_write_to_disk, args_iter)
@@ -145,9 +134,7 @@ def _write_to_disk(args):
     log.info(f"Done with {year}")
 
 
-def _create_TM(
-    cfg: DictConfig, edges: pd.DataFrame, huc_to_merit_TM: pd.DataFrame
-) -> pd.DataFrame:
+def _create_TM(cfg: DictConfig, edges: pd.DataFrame, huc_to_merit_TM: pd.DataFrame) -> pd.DataFrame:
     """
     Creating a TM that maps MERIT basins to their reaches. Flow predictions are distributed
     based on reach length/ total merit reach length
@@ -160,9 +147,7 @@ def _create_TM(
     if tm.exists():
         return pd.read_csv(tm, compression="gzip")
     else:
-        merit_basins = huc_to_merit_TM.columns[
-            huc_to_merit_TM.columns != "HUC10"
-        ].values
+        merit_basins = huc_to_merit_TM.columns[huc_to_merit_TM.columns != "HUC10"].values
         sorted_edges = edges.sort_values(by="merit_basin", ascending=False)
         river_graph_ids = sorted_edges["id"].values
         river_graph_ids.sort()
@@ -180,9 +165,7 @@ def _create_TM(
             merit_reaches = edges[edges["merit_basin"] == int(id)]
             if merit_reaches.shape[0] == 0:
                 log.error(f"Missing row for {id}")
-            total_length = sum(
-                [merit_reaches.iloc[i].len for i in range(merit_reaches.shape[0])]
-            )
+            total_length = sum([merit_reaches.iloc[i].len for i in range(merit_reaches.shape[0])])
             for j, reach in merit_reaches.iterrows():
                 data = np.zeros([merit_basins.shape[0]])
                 data[idx] = reach.len / total_length
@@ -267,9 +250,7 @@ def _create_streamflow(cfg: DictConfig, huc_10_list: np.ndarray) -> pd.DataFrame
                 try:
                     attr_idx = row.index[0]
                     try:
-                        row_idx = attr_idx - (
-                            key * 1000
-                        )  # taking only the back three numbers
+                        row_idx = attr_idx - (key * 1000)  # taking only the back three numbers
                         _streamflow = df.iloc[row_idx].values
                     except IndexError:
                         #  TODO SOLVE THIS for UPPER COLORADO
@@ -282,9 +263,7 @@ def _create_streamflow(cfg: DictConfig, huc_10_list: np.ndarray) -> pd.DataFrame
                 except IndexError:
                     #  TODO Get the HUC values that are missing. Adding temporary fixes
                     #  Using the previous HUC's prediction
-                    log.info(
-                        f"HUC10 {id} is missing from the attributes file. Replacing with previous HUC prediction"
-                    )
+                    log.info(f"HUC10 {id} is missing from the attributes file. Replacing with previous HUC prediction")
                     streamflow_data.append(_streamflow)
 
     output = np.column_stack(streamflow_data)

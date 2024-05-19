@@ -88,9 +88,7 @@ def calculate_num_edges(length: float, dx: float, buffer: float) -> Tuple:
     return (int(num_edges), edge_len)
 
 
-def create_edge_json(
-    segment_row: pd.Series, up=None, ds=None, edge_id=None
-) -> Dict[str, Any]:
+def create_edge_json(segment_row: pd.Series, up=None, ds=None, edge_id=None) -> Dict[str, Any]:
     """
     Create a JSON representation of an edge based on segment data.
 
@@ -360,17 +358,13 @@ def many_segment_to_edge_partition(
                 edge = create_edge_json(
                     segment,
                     up=[f"{segment['id']}_{i - 1}"],
-                    ds=f"{segment['id']}_{i + 1}"
-                    if i < num_edges - 1
-                    else f"{segment['ds']}_0",
+                    ds=f"{segment['id']}_{i + 1}" if i < num_edges - 1 else f"{segment['ds']}_0",
                     edge_id=f"{segment['id']}_{i}",
                 )
             edge["len"] = edge_len
             edge["len_dir"] = edge_len / segment["sinuosity"]
             all_segment_edges.append(edge)
-        all_segment_edges = calculate_drainage_area_for_all_edges(
-            all_segment_edges, segment_das
-        )
+        all_segment_edges = calculate_drainage_area_for_all_edges(all_segment_edges, segment_das)
         for edge in all_segment_edges:
             all_edges.append(edge)
     return pd.DataFrame(all_edges)

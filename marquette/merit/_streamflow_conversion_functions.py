@@ -42,9 +42,7 @@ def calculate_huc10_flow_from_individual_files(cfg: DictConfig) -> None:
             file_path = streamflow_files_path / f"{huc_id}.npy"
             data = np.load(file_path)
             file_id = file_path.stem
-            area = id_to_area.get(
-                file_id
-            )  # defaulting to mean area if there is no area for the HUC10
+            area = id_to_area.get(file_id)  # defaulting to mean area if there is no area for the HUC10
             # CONVERTING FROM MM/DAY TO M3/S
             data = data * area * 1000 / 86400
             streamflow_data[:, i] = data
@@ -96,9 +94,7 @@ def separate_basins(cfg: DictConfig) -> None:
                     header=None,
                 ).values
             attribute_batch_df = pd.read_csv(
-                qr_folder
-                / "attributes"
-                / f"attributes_{start_idx[idx]}_{end_idx[idx]}.csv"
+                qr_folder / "attributes" / f"attributes_{start_idx[idx]}_{end_idx[idx]}.csv"
             )
             attribute_batch_ids = attribute_batch_df.gage_ID.values
             for idx, _id in enumerate(
@@ -115,26 +111,18 @@ def separate_basins(cfg: DictConfig) -> None:
 
 
 def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
-    attrs_df = pd.read_csv(
-        Path(cfg.create_streamflow.obs_attributes) / f"COMID_{str(cfg.zone)[0]}.csv"
-    )
+    attrs_df = pd.read_csv(Path(cfg.create_streamflow.obs_attributes) / f"COMID_{str(cfg.zone)[0]}.csv")
     id_to_area = attrs_df.set_index("COMID")["unitarea"].to_dict()
 
     edge_comids = np.unique(edges.merit_basin[:])  # already sorted
 
-    streamflow_predictions_root = zarr.open(
-        Path(cfg.create_streamflow.predictions), mode="r"
-    )
+    streamflow_predictions_root = zarr.open(Path(cfg.create_streamflow.predictions), mode="r")
 
     # Different merit forwards have different save outputs. Specifying here to handle the different versions
-    version = int(
-        cfg.create_streamflow.version.lower().split("_v")[1][0]
-    )  # getting the version number
+    version = int(cfg.create_streamflow.version.lower().split("_v")[1][0])  # getting the version number
     if version >= 3:
         log.info(msg="Reading Zarr Store")
-        zone_keys = [
-            key for key in streamflow_predictions_root.keys() if str(cfg.zone) in key
-        ]
+        zone_keys = [key for key in streamflow_predictions_root.keys() if str(cfg.zone) in key]
         zone_comids = []
         zone_runoff = []
         for key in zone_keys:
@@ -168,9 +156,7 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
 
     log.info("Converting runoff data, setting NaN and 0 to 1e-6")
     streamflow_m3_s_data = runoff_full_zone * areas_array
-    streamflow_m3_s_data = np.nan_to_num(
-        streamflow_m3_s_data, nan=1e-6, posinf=1e-6, neginf=1e-6
-    )
+    streamflow_m3_s_data = np.nan_to_num(streamflow_m3_s_data, nan=1e-6, posinf=1e-6, neginf=1e-6)
     mask = streamflow_m3_s_data == 0
     streamflow_m3_s_data[mask] = 1e-6
 

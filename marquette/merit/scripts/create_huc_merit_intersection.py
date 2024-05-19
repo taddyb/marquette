@@ -57,9 +57,7 @@ def create_TM(cfg: DictConfig, gdf: gpd.GeoDataFrame) -> None:
         )
     ):
         merit_basins = gdf[gdf["huc10"] == id]
-        total_area = sum(
-            [merit_basins.iloc[i].unitarea for i in range(merit_basins.shape[0])]
-        )
+        total_area = sum([merit_basins.iloc[i].unitarea for i in range(merit_basins.shape[0])])
         for j, basin in merit_basins.iterrows():
             df_cols.append(basin.COMID)
             data = np.zeros([huc10_ids.shape[0]])
@@ -76,9 +74,7 @@ def create_TM(cfg: DictConfig, gdf: gpd.GeoDataFrame) -> None:
     log.info("Finished Data Extraction")
 
 
-@hydra.main(
-    version_base=None, config_path="../../conf/scripts/", config_name="create_srb"
-)
+@hydra.main(version_base=None, config_path="../../conf/scripts/", config_name="create_srb")
 def create_intersections(cfg: DictConfig) -> None:
     # Define the Albers Equal Area Conic projection parameters for CONUS
     albers_conus = CRS.from_proj4(

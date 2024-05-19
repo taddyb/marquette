@@ -128,9 +128,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         matching_upstream_areas = zone_upstream_areas[matching_indices]
         differences = np.abs(matching_upstream_areas - DRAIN_SQKM)
         min_diff_idx = np.argmin(differences)
-        percent_error = (
-            (differences[min_diff_idx] / DRAIN_SQKM) if DRAIN_SQKM != 0 else np.nan
-        )
+        percent_error = (differences[min_diff_idx] / DRAIN_SQKM) if DRAIN_SQKM != 0 else np.nan
         ratio = np.abs(matching_upstream_areas / DRAIN_SQKM)
 
         return (
@@ -149,9 +147,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         try:
             gage_ids = gage_locations_df["id"].astype(str).apply(lambda x: x.zfill(8))
         except KeyError:
-            gage_ids = (
-                gage_locations_df["STAT_ID"].astype(str).apply(lambda x: x.zfill(8))
-            )
+            gage_ids = gage_locations_df["STAT_ID"].astype(str).apply(lambda x: x.zfill(8))
         gdf = gdf[gdf["STAID"].isin(gage_ids)]
     gdf["COMID"] = gdf["COMID"].astype(int)
     filtered_gdf = filter_by_comid_prefix(gdf, cfg.zone)
@@ -164,9 +160,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
     zone_merit_basin_ids = edges.merit_basin[:]
     zone_upstream_areas = edges.uparea[:]
     edge_info = unique_gdf.apply(
-        lambda row: find_closest_edge(
-            row, zone_edge_ids, zone_merit_basin_ids, zone_upstream_areas
-        ),
+        lambda row: find_closest_edge(row, zone_edge_ids, zone_merit_basin_ids, zone_upstream_areas),
         axis=1,
         result_type="expand",
     )
@@ -177,9 +171,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
     unique_gdf["drainage_area_percent_error"] = edge_info[4]
     unique_gdf["a_merit_a_usgs_ratio"] = edge_info[5]
 
-    result_df = unique_gdf[
-        unique_gdf["drainage_area_percent_error"] <= cfg.create_N.drainage_area_treshold
-    ]
+    result_df = unique_gdf[unique_gdf["drainage_area_percent_error"] <= cfg.create_N.drainage_area_treshold]
 
     try:
         result_df["LNG_GAGE"] = result_df["LON_GAGE"]
@@ -218,9 +210,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
             sorted_df = combined_df.sort_values(by=["STAID"])
             sorted_df.to_csv(Path(cfg.create_N.obs_dataset_output), index=False)
         except pd.errors.InvalidIndexError:
-            log.info(
-                "Not merging your file with the master list as it seems like your gages are already included"
-            )
+            log.info("Not merging your file with the master list as it seems like your gages are already included")
     except FileNotFoundError:
         result.to_csv(Path(cfg.create_N.obs_dataset_output), index=False)
     return result
@@ -291,9 +281,7 @@ def create_gage_connectivity(
 
         return river_graph
 
-    def create_coo_data(
-        gage_output, _gage_id: str, root: zarr.Group
-    ) -> List[Tuple[Any, Any]]:
+    def create_coo_data(gage_output, _gage_id: str, root: zarr.Group) -> List[Tuple[Any, Any]]:
         """
         Creates coordinate format (COO) data from river graph output for a specific gage.
 
@@ -313,9 +301,7 @@ def create_gage_connectivity(
 
         # Create a Zarr dataset for this specific gage
         single_gage_csr_data = root.require_group(_gage_id)
-        single_gage_csr_data.create_dataset(
-            "pairs", data=np.array(pairs), chunks=(10000,), dtype="float32"
-        )
+        single_gage_csr_data.create_dataset("pairs", data=np.array(pairs), chunks=(10000,), dtype="float32")
 
     def find_connections(row, coo_root, zone_attributes, _pad_gage_id=True):
         if _pad_gage_id:
@@ -325,9 +311,7 @@ def create_gage_connectivity(
         edge_id = row["edge_intersection"]
         zone_edge_id = row["zone_edge_id"]
         if _gage_id not in coo_root:
-            gage_output = stack_traversal(
-                _gage_id, edge_id, zone_edge_id, zone_attributes
-            )
+            gage_output = stack_traversal(_gage_id, edge_id, zone_edge_id, zone_attributes)
             create_coo_data(gage_output, _gage_id, coo_root)
 
     def apply_find_connections(row, gage_coo_root, edges, pad_gage_id):
@@ -398,6 +382,4 @@ def new_zone_connectivity(
 
     pairs = format_pairs(river_graph)
 
-    full_zone_root.create_dataset(
-        "pairs", data=np.array(pairs), chunks=(5000, 5000), dtype="float32"
-    )
+    full_zone_root.create_dataset("pairs", data=np.array(pairs), chunks=(5000, 5000), dtype="float32")
