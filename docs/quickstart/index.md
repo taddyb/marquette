@@ -9,20 +9,20 @@ The first step to using Marquette is creating a Python environment with all of t
     UV support is still experimental
 
 === "Anaconda"
-    ```sh
+    ``` bash
     conda create -n marquette python=3.11
     conda activate marquette
     pip install -r requirements.txt
     ```
 === "uv"
-    ```sh
+    ``` bash
     uv venv
     uv pip sync requirements.txt
     ```
 
 ## Data
 
-### Hydrofabric:
+### Hydrofabric
 
 Data required for MERIT BASINS is available [here](https://www.reachhydro.org/home/records/google-drive-linux-instructions)
 
@@ -38,13 +38,13 @@ Data required for MERIT BASINS is available [here](https://www.reachhydro.org/ho
 
 To run the module, prepare a configuration file then run:
 
-```sh
+``` bash
 python -m marquette
 ```
 
 To run over multiple MERIT zones, run using hydra multirun
 
-```sh
+``` bash
 python -m marquette --multirun zone=71,72,73
 ```
 

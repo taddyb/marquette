@@ -7,7 +7,7 @@ Marquette is a tool designed to format Hydrofabric data such that it can be used
 
 - [MERIT-BASINS](https://www.reachhydro.org/home/params/merit-basins)
 
-## Citation:
+## Citation
 
 Official citation coming soon. For now, use:
 
