@@ -1,37 +1,49 @@
 import ast
 import logging
 from pathlib import Path
-from typing import Any, List, Tuple
+from typing import Any
 
 import dask.dataframe as dd
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import zarr
-from dask.diagnostics import ProgressBar
+from dask.diagnostics.progress import ProgressBar
 from omegaconf import DictConfig
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
 
 
-def format_pairs(gage_output: dict):
+def format_pairs(gage_output: dict) -> list[tuple[Any, Any]]:
+    """A function to format the intersection points of the gauges within the connectivity matrix.
+
+    Parameters
+    ----------
+    gage_output : dict
+        The output from a river graph traversal, containing 'ds' and 'up' keys.
+
+    Returns
+    -------
+    list[tuple[Any, Any]]
+        The formatted pairs of downstream and upstream nodes.
+    """
     pairs = []
 
     # Iterate over downstream and upstream nodes to create pairs
-    for ds, ups in zip(gage_output["ds"], gage_output["up"]):
+    for ds, ups in zip(gage_output["ds"], gage_output["up"], strict=False):
         for up in ups:
             # Check if upstream is a list (multiple connections)
             if isinstance(up, list):
                 for _id in up:
                     # Replace None with np.NaN for consistency
                     if _id is None:
-                        _id = np.NaN
+                        _id = np.nan
                     pairs.append((ds, _id))
             else:
                 # Handle single connection (not a list)
                 if up is None:
-                    up = np.NaN
+                    up = np.nan
                 pairs.append((ds, up))
 
     return pairs
@@ -41,10 +53,12 @@ def left_pad_number(number):
     """
     Left pads a number with '0' if it has 7 digits to make it 8 digits long.
 
-    Parameters:
+    Parameters
+    ----------
     number (int or str): The number to be left-padded.
 
-    Returns:
+    Returns
+    -------
     str: The left-padded number as a string.
     """
     number_str = str(number)
@@ -53,16 +67,32 @@ def left_pad_number(number):
     return number_str
 
 
-def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
+def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame | bool:
+    """A function which reads the buffered upstream flowline intersections and maps the gages that intersect the lines to the correct MERIT edge.
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The configuration object.
+    edges : zarr.Group
+        The zarr group object containing edge data.
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        A GeoDataFrame containing the mapped gages and their corresponding MERIT edges.
+    """
+
     def choose_row_to_keep(group_df: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         """
-        Selects the row where 'uparea' is closest to 'DRAIN_SQKM' without going below it.
-        If no such row exists, selects the row with the closest 'uparea' under 'DRAIN_SQKM'.
+        Selects the row where 'uparea' is closest to 'DRAIN_SQKM' without going below it. If no such row exists, selects the row with the closest 'uparea' under 'DRAIN_SQKM'.
 
-        Parameters:
+        Parameters
+        ----------
         group_df (DataFrame): DataFrame representing all rows of a particular group.
 
-        Returns:
+        Returns
+        -------
         DataFrame: A single row which has the closest 'uparea' to 'DRAIN_SQKM'.
         """
         group_df["diff"] = group_df["uparea"] - group_df["DRAIN_SQKM"]
@@ -73,22 +103,25 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         else:
             idx = group_df["diff"].abs().idxmin()
 
-        return group_df.loc[[idx]].drop(columns=["diff"])
+        return group_df.loc[[idx]].drop(columns=["diff"])  # type: ignore
 
     def filter_by_comid_prefix(gdf: gpd.GeoDataFrame, prefix: str) -> gpd.GeoDataFrame:
         """
-        Filters a GeoDataFrame to include only rows where the first two characters
-        of the 'COMID' column match the given prefix.
+        Filters a GeoDataFrame to include only rows where the first two characters of the 'COMID' column match the given prefix.
 
-        Parameters:
-        gdf (GeoDataFrame): The GeoDataFrame to filter.
-        prefix (str): The two-character prefix to match.
+        Parameters
+        ----------
+        gdf (GeoDataFrame):
+            The GeoDataFrame to filter.
+        prefix (str):
+            The two-character prefix to match.
 
-        Returns:
+        Returns
+        -------
         GeoDataFrame: Filtered GeoDataFrame.
         """
         gdf["MERIT_ZONE"] = gdf["COMID"].astype(str).str[:2]
-        filtered_gdf = gdf[gdf["MERIT_ZONE"] == str(prefix)]
+        filtered_gdf: gpd.GeoDataFrame = gdf[gdf["MERIT_ZONE"] == str(prefix)]  # type: ignore
         return filtered_gdf
 
     def find_closest_edge(
@@ -98,18 +131,23 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         zone_upstream_areas: np.ndarray,
     ):
         """
-        Finds details of the edge with the upstream area closest to the DRAIN_SQKM value in absolute terms
-        and calculates the percent error between DRAIN_SQKM and the matched zone_edge_uparea.
+        Finds details of the edge with the upstream area closest to the DRAIN_SQKM value in absolute terms and calculates the percent error between DRAIN_SQKM and the matched zone_edge_uparea.
 
-        Parameters:
-        row (GeoSeries): A row from the result_df GeoDataFrame.
-        zone_edge_ids (ndarray): Array of edge IDs.
-        zone_merit_basin_ids (ndarray): Array of merit basin IDs corresponding to edge IDs.
-        zone_upstream_areas (ndarray): Array of upstream areas corresponding to edge IDs.
+        Parameters
+        ----------
+        row (GeoSeries):
+            A row from the result_df GeoDataFrame.
+        zone_edge_ids (ndarray):
+            Array of edge IDs.
+        zone_merit_basin_ids (ndarray):
+            Array of merit basin IDs corresponding to edge IDs.
+        zone_upstream_areas (ndarray):
+            Array of upstream areas corresponding to edge IDs.
 
-        Returns:
-        Tuple[np.float64, int, np.float64, np.float64, np.float64]: Contains edge ID, index of the matching edge, upstream area of the matching edge,
-               the difference in catchment area, and the percent error between DRAIN_SQKM and zone_edge_uparea.
+        Returns
+        -------
+        Tuple[np.float64, int, np.float64, np.float64, np.float64]:
+            Contains edge ID, index of the matching edge, upstream area of the matching edge, the difference in catchment area, and the percent error between DRAIN_SQKM and zone_edge_uparea.
         """
         COMID = row["COMID"]
         DRAIN_SQKM = row["DRAIN_SQKM"]
@@ -155,10 +193,10 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         log.info("No MERIT BASINS within this region")
         return False
     grouped = filtered_gdf.groupby("STAID")
-    unique_gdf = grouped.apply(choose_row_to_keep).reset_index(drop=True)
-    zone_edge_ids = edges.id[:]
-    zone_merit_basin_ids = edges.merit_basin[:]
-    zone_upstream_areas = edges.uparea[:]
+    unique_gdf = grouped.apply(choose_row_to_keep).reset_index(drop=True)  # type: ignore
+    zone_edge_ids: np.ndarray = edges.id[:]  # type: ignore
+    zone_merit_basin_ids: np.ndarray = edges.merit_basin[:]  # type: ignore
+    zone_upstream_areas: np.ndarray = edges.uparea[:]  # type: ignore
     edge_info = unique_gdf.apply(
         lambda row: find_closest_edge(row, zone_edge_ids, zone_merit_basin_ids, zone_upstream_areas),
         axis=1,
@@ -233,11 +271,13 @@ def create_gage_connectivity(
 
         Parameters
         ----------
-        id_ (str): The identifier of the starting node in the river graph.
-        idx (int): The index of the starting node in the 'merit_flowlines' dataset.
-        merit_flowlines (zarr.Group): A Zarr group containing river flowline data.
-                                      Expected to have 'up' and 'id' arrays for upstream connections
-                                      and node identifiers, respectively.
+        id_: str
+            The identifier of the starting node in the river graph.
+        idx: int
+            The index of the starting node in the 'merit_flowlines' dataset.
+        merit_flowlines: zarr.Group
+            A Zarr group containing river flowline data.
+            Expected to have 'up' and 'id' arrays for upstream connections and node identifiers, respectively.
 
         Returns
         -------
@@ -266,7 +306,7 @@ def create_gage_connectivity(
                 continue
             visited.add(current_id)
 
-            up_ids = ast.literal_eval(merit_flowlines.up[current_idx])
+            up_ids = ast.literal_eval(merit_flowlines.up[current_idx])  # type: ignore
             up_idx_list = []
 
             for up_id in up_ids:
@@ -283,7 +323,7 @@ def create_gage_connectivity(
 
         return river_graph
 
-    def create_coo_data(gage_output, _gage_id: str, root: zarr.Group) -> List[Tuple[Any, Any]]:
+    def create_coo_data(gage_output, _gage_id: str, root: zarr.Group) -> None:
         """
         Creates coordinate format (COO) data from river graph output for a specific gage.
 
@@ -296,10 +336,6 @@ def create_gage_connectivity(
         gage_output: The output from a river graph traversal, containing 'ds' and 'up' keys.
         padded_gage_id (str): The identifier for the gage, used to create a specific group in Zarr.
         root (zarr.Group): The root Zarr group where the dataset will be stored.
-
-        Returns
-        -------
-        List[Tuple[Any, Any]]: A list of tuples, each representing a pair of connected nodes in the graph.
         """
         pairs = format_pairs(gage_output)
 
@@ -322,7 +358,7 @@ def create_gage_connectivity(
         return find_connections(row, gage_coo_root, edges, pad_gage_id)
 
     pad_gage_id = cfg.create_N.pad_gage_id
-    dask_df = dd.from_pandas(zone_csv, npartitions=16)
+    dask_df = dd.from_pandas(zone_csv, npartitions=16)  # type: ignore
     result = dask_df.apply(
         apply_find_connections,
         args=(gage_coo_root, edges, pad_gage_id),
@@ -357,7 +393,7 @@ def new_zone_connectivity(
         """
         river_graph = {"ds": [], "up": []}
         for idx in tqdm(
-            range(edges.id.shape[0]), # type: ignore
+            range(edges.id.shape[0]),  # type: ignore
             desc="Looping through edges",
             ascii=True,
             ncols=140,
@@ -365,7 +401,7 @@ def new_zone_connectivity(
             river_graph["ds"].append(idx)
 
             # Decode upstream ids and convert to indices
-            upstream_ids = ast.literal_eval(edges.up[idx]) # type: ignore
+            upstream_ids = ast.literal_eval(edges.up[idx])  # type: ignore
             if len(upstream_ids) == 0:
                 river_graph["up"].append([None])
             else:
@@ -374,16 +410,7 @@ def new_zone_connectivity(
         return river_graph
 
     mapping = {id_: i for i, id_ in enumerate(edges.id[:])}
-    # bag = db.from_sequence(range(edges.id.shape[0]), npartitions=100)  # Adjust the number of partitions as needed
-    # results = bag.map(lambda idx: find_connection(idx, edges, mapping))
-    # with ProgressBar():
-    #     traversed_graphs = results.compute()
     river_graph = find_connection(edges, mapping)
-
-    # combined_graph = {"ds": [], "up": []}
-    # for graph in traversed_graphs:
-    #     combined_graph["ds"].extend(graph["ds"])
-    #     combined_graph["up"].extend(graph["up"])
 
     pairs = format_pairs(river_graph)
 

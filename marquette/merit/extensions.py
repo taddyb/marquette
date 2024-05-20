@@ -110,7 +110,7 @@ def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
     ).shape[0]
     if pet_file_path.exists() is False:
         raise FileNotFoundError("PET forcing data not found")
-    edge_merit_basins: np.ndarray = edges.merit_basin[:] # type: ignore
+    edge_merit_basins: np.ndarray = edges.merit_basin[:]  # type: ignore
     pet_edge_data = []
     pet_comid_data = []
     mapping = np.empty_like(edge_merit_basins, dtype=int)
@@ -158,18 +158,18 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
     ValueError
         If the data is not consistent. Check the number of comids in the data and the edge_merit_basins array.
     """
-#     Attributes in the provided file are as follows:
-#     ['area','ETPOT_Hargr', 'FW', 'HWSD_clay', 'HWSD_gravel', 'HWSD_sand',
-#    'HWSD_silt', 'NDVI', 'Porosity', 'SoilGrids1km_clay',
-#    'SoilGrids1km_sand', 'SoilGrids1km_silt', 'T_clay', 'T_gravel',
-#    'T_sand', 'T_silt', 'aridity', 'glaciers', 'meanP', 'meanTa',
-#    'meanelevation', 'meanslope', 'permafrost', 'permeability',
-#    'seasonality_P', 'seasonality_PET', 'snow_fraction',
-#    'snowfall_fraction']
+    #     Attributes in the provided file are as follows:
+    #     ['area','ETPOT_Hargr', 'FW', 'HWSD_clay', 'HWSD_gravel', 'HWSD_sand',
+    #    'HWSD_silt', 'NDVI', 'Porosity', 'SoilGrids1km_clay',
+    #    'SoilGrids1km_sand', 'SoilGrids1km_silt', 'T_clay', 'T_gravel',
+    #    'T_sand', 'T_silt', 'aridity', 'glaciers', 'meanP', 'meanTa',
+    #    'meanelevation', 'meanslope', 'permafrost', 'permeability',
+    #    'seasonality_P', 'seasonality_PET', 'snow_fraction',
+    #    'snowfall_fraction']
     file_path = Path(f"/projects/mhpi/data/global/zarr_sub_zone/{cfg.zone}")
     if file_path.exists() is False:
         raise FileNotFoundError("global_dhbv_static_inputs data not found")
-    edge_merit_basins: np.ndarray = edges.merit_basin[:] # type: ignore
+    edge_merit_basins: np.ndarray = edges.merit_basin[:]  # type: ignore
     comid_data = []
     aridity_data = []
     porosity_data = []
@@ -243,7 +243,7 @@ def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> N
         {
             "COMID": edges.merit_basin[:],
             "id": edges.id[:],
-            "order": np.arange(edges.id.shape[0]), # type: ignore
+            "order": np.arange(edges.id.shape[0]),  # type: ignore
         }
     )
 

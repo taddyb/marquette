@@ -2,6 +2,7 @@
 
 import logging
 import multiprocessing
+import warnings
 from pathlib import Path
 
 import geopandas as gpd
@@ -10,13 +11,6 @@ import pandas as pd
 from omegaconf import DictConfig
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
-
-from marquette.merit._graph import (
-    Segment,
-    data_to_csv,
-    get_edge_counts,
-    segments_to_edges,
-)
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +24,10 @@ def _plot_gdf(gdf: gpd.GeoDataFrame) -> None:
         A GeoDataFrame of interest
     """
     import matplotlib.pyplot as plt
+
+    warnings.warn(
+        "This function is deprecated and will be removed in a future version.", DeprecationWarning, stacklevel=2
+    )
 
     fig, ax = plt.subplots(figsize=(10, 10))
     gdf.plot(ax=ax)
@@ -95,19 +93,26 @@ def _plot_gdf(gdf: gpd.GeoDataFrame) -> None:
 
 
 def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
+    """Maps streamflow predictions to the river graph
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The configuration object.
+    edges : pd.DataFrame
+        The edges dataframe.
     """
-    Ways to check if this is right:
-      - sort each column and index row
-      - subtract the HUC cols from flow from the HUC index of hm_TM
-        (f_cols.astype("int") - huc_to_merit_TM["HUC10"]).sum()
-      - subtract the MERIT cols from hm_TM from the MERIT index of mrg_TM
-        (hm_cols.astype("int") - merit_to_river_graph_TM["Merit_Basins"]).sum()
-    :param cfg:
-    :param edges:
-    :return:
-    """
+    warnings.warn(
+        "This function is deprecated and will be removed in a future version.", DeprecationWarning, stacklevel=2
+    )
+    # Ways to check if this is right.
+    # - sort each column and index row
+    # - subtract the HUC cols from flow from the HUC index of hm_TM
+    # (f_cols.astype("int") - huc_to_merit_TM["HUC10"]).sum()
+    # - subtract the MERIT cols from hm_TM from the MERIT index of mrg_TM
+    # (hm_cols.astype("int") - merit_to_river_graph_TM["Merit_Basins"]).sum()
     huc_to_merit_TM = pd.read_csv(cfg.save_paths.huc_to_merit_tm, compression="gzip")
-    huc_10_list = huc_to_merit_TM["HUC10"].values
+    huc_10_list: np.ndarray = huc_to_merit_TM["HUC10"].values  # type: ignore
     hm_TM = csr_matrix(huc_to_merit_TM.drop("HUC10", axis=1).values)
     merit_to_river_graph_TM = _create_TM(cfg, edges, huc_to_merit_TM)
     if "Merit_Basins" in merit_to_river_graph_TM.columns:
@@ -127,6 +132,9 @@ def map_streamflow_to_river_graph(cfg: DictConfig, edges: pd.DataFrame) -> None:
 
 
 def _write_to_disk(args):
+    warnings.warn(
+        "This function is deprecated and will be removed in a future version.", DeprecationWarning, stacklevel=2
+    )
     cfg, grouped_predictions, hm_TM, mrg_TM, columns = args
     save_path = Path(cfg.csv.mapped_streamflow_dir)
     save_path.mkdir(exist_ok=True, parents=True)
@@ -154,13 +162,25 @@ def _write_to_disk(args):
 
 def _create_TM(cfg: DictConfig, edges: pd.DataFrame, huc_to_merit_TM: pd.DataFrame) -> pd.DataFrame:
     """
-    Creating a TM that maps MERIT basins to their reaches. Flow predictions are distributed
-    based on reach length/ total merit reach length
-    :param cfg:
-    :param edges:
-    :param huc_to_merit_TM:
-    :return:
+    Creating a TM that maps MERIT basins to their reaches. Flow predictions are distributed based on reach length/ total merit reach length
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        Hydra configuration object containing settings.
+    edges : pd.DataFrame
+        The edges dataframe.
+    huc_to_merit_TM : pd.DataFrame
+        The HUC to MERIT TM.
+
+    Returns
+    -------
+    pd.DataFrame
+        The MERIT to river graph TM.
     """
+    warnings.warn(
+        "This function is deprecated and will be removed in a future version.", DeprecationWarning, stacklevel=2
+    )
     tm = Path(cfg.save_paths.merit_to_river_graph_tm)
     if tm.exists():
         return pd.read_csv(tm, compression="gzip")
@@ -168,8 +188,8 @@ def _create_TM(cfg: DictConfig, edges: pd.DataFrame, huc_to_merit_TM: pd.DataFra
         merit_basins = huc_to_merit_TM.columns[huc_to_merit_TM.columns != "HUC10"].values
         sorted_edges = edges.sort_values(by="merit_basin", ascending=False)
         river_graph_ids = sorted_edges["id"].values
-        river_graph_ids.sort()
-        df = pd.DataFrame(index=merit_basins, columns=river_graph_ids)
+        river_graph_ids.sort()  # type: ignore
+        df = pd.DataFrame(index=merit_basins, columns=river_graph_ids)  # type: ignore
         df["Merit_Basins"] = merit_basins
         df = df.set_index("Merit_Basins")
         for idx, id in enumerate(
@@ -184,7 +204,7 @@ def _create_TM(cfg: DictConfig, edges: pd.DataFrame, huc_to_merit_TM: pd.DataFra
             if merit_reaches.shape[0] == 0:
                 log.error(f"Missing row for {id}")
             total_length = sum([merit_reaches.iloc[i].len for i in range(merit_reaches.shape[0])])
-            for j, reach in merit_reaches.iterrows():
+            for _, reach in merit_reaches.iterrows():
                 data = np.zeros([merit_basins.shape[0]])
                 data[idx] = reach.len / total_length
                 df[reach.id] = data
@@ -220,17 +240,26 @@ def _interpolate(cfg: DictConfig, df: pd.DataFrame, year: int) -> pd.DataFrame:
 
 
 def _create_streamflow(cfg: DictConfig, huc_10_list: np.ndarray) -> pd.DataFrame:
+    """Extracting streamflow from many files based on HUC IDs
+
+    Parameters
+    ----------
+    cfg : DictConfig
+        The configuration object
+    huc_10_list : np.ndarray
+        The HUC10 list
+
+    Returns
+    -------
+    pd.DataFrame
+        The streamflow data
     """
-    extracting streamflow from many files based on HUC IDs
-    :param cfg:
-    :return:
-    """
+    warnings.warn(
+        "This function is deprecated and will be removed in a future version.", DeprecationWarning, stacklevel=2
+    )
 
     def extract_numbers(filename):
-        """
-        Extracts the first set of numbers from the filename and returns them as an integer.
-        Assumes the filename contains numbers in the format 'xxxx_yyyy'.
-        """
+        """Extracts the first set of numbers from the filename and returns them as an integer. Assumes the filename contains numbers in the format 'xxxx_yyyy'."""
         import re
 
         match = re.search(r"(\d+)_(\d+)", str(filename))
@@ -276,8 +305,8 @@ def _create_streamflow(cfg: DictConfig, huc_10_list: np.ndarray) -> pd.DataFrame
                     if cfg.units.lower() == "mm/day":
                         # converting from mm/day to m3/s
                         area = row["area"].values[0]
-                        _streamflow = _streamflow * area * 1000 / 86400
-                    streamflow_data.append(_streamflow)
+                        _streamflow = _streamflow * area * 1000 / 86400  # type: ignore
+                    streamflow_data.append(_streamflow)  # type: ignore
                 except IndexError:
                     #  TODO Get the HUC values that are missing. Adding temporary fixes
                     #  Using the previous HUC's prediction
@@ -291,13 +320,13 @@ def _create_streamflow(cfg: DictConfig, huc_10_list: np.ndarray) -> pd.DataFrame
     return output_df
 
 
-def _sort_into_bins(ids: np.ndarray, bins: List[np.ndarray]):
-    """
-    :param ids: a list of HUC10 IDS
-    :return:
-    """
+def _sort_into_bins(ids: np.ndarray, bins: list[np.ndarray]):
+    """Sorts the HUC10 IDs into bins based on their dates"""
+    warnings.warn(
+        "This function is deprecated and will be removed in a future version.", DeprecationWarning, stacklevel=2
+    )
 
-    def find_list_of_str(target: int, sorted_lists: List[np.ndarray]):
+    def find_list_of_str(target: int, sorted_lists: list[np.ndarray]):
         left, right = 0, len(sorted_lists) - 1
         while left <= right:
             mid = (left + right) // 2
@@ -317,9 +346,9 @@ def _sort_into_bins(ids: np.ndarray, bins: List[np.ndarray]):
 
     keys = list(range(0, 16, 1))
     grouped_values = {key: [] for key in keys}
-    for idx, value in enumerate(ids):
+    for idx, _ in enumerate(ids):
         id = int(ids[idx])
         _key = find_list_of_str(id, bins)
-        grouped_values[_key].append({id: idx})
+        grouped_values[_key].append({id: idx})  # type: ignore
 
     return grouped_values

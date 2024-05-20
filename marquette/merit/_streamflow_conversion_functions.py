@@ -20,7 +20,9 @@ def calculate_huc10_flow_from_individual_files(cfg: DictConfig) -> None:
     cfg : DictConfig
         The configuration object.
     """
-    warnings.warn("This function is deprecated and will be removed in a future version.", DeprecationWarning, stacklevel=2)
+    warnings.warn(
+        "This function is deprecated and will be removed in a future version.", DeprecationWarning, stacklevel=2
+    )
     qr_folder = Path(cfg.create_streamflow.predictions)
     streamflow_files_path = qr_folder / "basin_split/"
 
@@ -31,7 +33,7 @@ def calculate_huc10_flow_from_individual_files(cfg: DictConfig) -> None:
     id_to_area = attrs_df.set_index("gage_ID")["area"].to_dict()
 
     huc_to_merit_TM = zarr.open(Path(cfg.create_TMs.HUC.TM).__str__(), mode="r")
-    huc_10_list = huc_to_merit_TM.HUC10[:] # type: ignore
+    huc_10_list = huc_to_merit_TM.HUC10[:]  # type: ignore
     date_range = pd.date_range(
         start=cfg.create_streamflow.start_date,
         end=cfg.create_streamflow.end_date,
@@ -82,7 +84,9 @@ def separate_basins(cfg: DictConfig) -> None:
     cfg : DictConfig
         The configuration object.
     """
-    warnings.warn("This function is deprecated and will be removed in a future version.", DeprecationWarning, stacklevel=2)
+    warnings.warn(
+        "This function is deprecated and will be removed in a future version.", DeprecationWarning, stacklevel=2
+    )
     qr_folder = Path(cfg.create_streamflow.predictions)
     data_split_folder = qr_folder / "basin_split/"
     if data_split_folder.exists() is False:
@@ -142,7 +146,7 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.Group) -> None:
 
     edge_comids = np.unique(edges.merit_basin[:])  # type: ignore # already sorted
 
-    streamflow_predictions_root: zarr.array = zarr.open(Path(cfg.create_streamflow.predictions).__str__(), mode="r") # type: ignore
+    streamflow_predictions_root: zarr.array = zarr.open(Path(cfg.create_streamflow.predictions).__str__(), mode="r")  # type: ignore
 
     # Different merit forwards have different save outputs. Specifying here to handle the different versions
     version = int(cfg.create_streamflow.version.lower().split("_v")[1][0])  # getting the version number
@@ -161,9 +165,9 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.Group) -> None:
 
     else:
         log.info("Reading Zarr Store")
-        file_runoff = np.transpose(streamflow_predictions_root.Runoff) # type: ignore
+        file_runoff = np.transpose(streamflow_predictions_root.Runoff)  # type: ignore
 
-        streamflow_comids: np.ndarray = streamflow_predictions_root.COMID[:].astype(int) # type: ignore
+        streamflow_comids: np.ndarray = streamflow_predictions_root.COMID[:].astype(int)  # type: ignore
 
     log.info("Mapping predictions to zone COMIDs")
     runoff_full_zone = np.zeros((file_runoff.shape[0], edge_comids.shape[0]))

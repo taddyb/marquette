@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import Any
 
 import geopandas as gpd
 import pandas as pd
@@ -37,17 +38,38 @@ class Edge:
         coords = self.coords
         source_crs = "EPSG:32618"
         target_crs = "EPSG:4326"  # WGS84
-        gdf: gpd.GeoDataFrame = gpd.GeoDataFrame(geometry=[Point(coord) for coord in coords], crs=source_crs) # type: ignore
-        gdf = gdf.to_crs(target_crs) # type: ignore
+        gdf: gpd.GeoDataFrame = gpd.GeoDataFrame(geometry=[Point(coord) for coord in coords], crs=source_crs)  # type: ignore
+        gdf = gdf.to_crs(target_crs)  # type: ignore
         self.coords = [(point.x, point.y) for point in gdf.geometry]
 
-    def calculate_sinuosity(self, curve_length):
+    def calculate_sinuosity(self, curve_length: float):
+        """Calculates the sinuosity of the edge.
+
+        Parameters
+        ----------
+        curve_length : float
+            _description_
+
+        Returns
+        -------
+        _type_
+            _description_
+        """
         euclidean_distance = Point(self.coords[0]).distance(Point(self.coords[-1]))
         self.len_dir = euclidean_distance
         # distances.append(euclidean_distance)
         return curve_length / euclidean_distance if euclidean_distance != 0 else 1
 
-    def calculate_drainage_area(self, idx, segment_das):
+    def calculate_drainage_area(self, idx: int, segment_das: dict[str, float]) -> None:
+        """Calculates the drainage area of the edge.
+
+        Parameters
+        ----------
+        idx : int
+            the specific index of the edge
+        segment_das : dict[str, float]
+            A dictionary containing the drainage areas of each segment
+        """
         if idx == -1:
             self.uparea = self.segment.uparea
         else:
@@ -147,7 +169,23 @@ class Segment:
         self.edge_len = None
 
 
-def get_edge_counts(segments, dx, buffer):
+def get_edge_counts(segments: list[Segment], dx: float, buffer: float) -> dict[str, int]:
+    """A function to calculate the number of edges for each segment.
+
+    Parameters
+    ----------
+    segments : list[Segment]
+        A list of merit segments.
+    dx : float
+        the length of each edge
+    buffer : float
+        a buffer of which to allow the edge length to deviate from dx
+
+    Returns
+    -------
+    dict[str, int]
+        A dictionary containing the number of edges for each segment.
+    """
     edge_counts = {}
 
     for segment in tqdm(
@@ -169,9 +207,9 @@ def get_edge_counts(segments, dx, buffer):
         source_crs = segment.crs
         target_crs = "EPSG:32618"
 
-        gdf = gpd.GeoDataFrame(geometry=[line], crs=source_crs)
+        gdf = gpd.GeoDataFrame(geometry=[line], crs=source_crs)  # type: ignore
         gdf = gdf.to_crs(target_crs)  # Transform to the target CRS
-        transformed_line = gdf.geometry.iloc[0]  # Get the transformed LineString
+        transformed_line = gdf.geometry.iloc[0]  # type: ignore # Get the transformed LineString
 
         length = transformed_line.length
         num_edges = length // dx
@@ -203,12 +241,26 @@ def get_edge_counts(segments, dx, buffer):
             edge_counts[segment.id] = int(num_edges)
 
         segment.transformed_line = transformed_line
-        segment.edge_len = edge_len
+        segment.edge_len = edge_len  # type: ignore
 
     return edge_counts
 
 
-def get_upstream_ids(segment, edge_counts):
+def get_upstream_ids(segment: Segment, edge_counts: dict[str, int]) -> list[str]:
+    """_summary_
+
+    Parameters
+    ----------
+    segment : Segment
+        A merit river segment
+    edge_counts : _type_
+        The number of edges to break the segment into
+
+    Returns
+    -------
+    list[str]
+        The upstream IDs of the segment.
+    """
     if segment.up is None:
         return []
     try:
@@ -219,7 +271,24 @@ def get_upstream_ids(segment, edge_counts):
     return up_ids
 
 
-def segments_to_edges(segment, edge_counts, segment_das):
+def segments_to_edges(segment: Segment, edge_counts: dict[str, int], segment_das) -> list[Edge]:
+    """
+    Converts segments to edges
+
+    Parameters
+    ----------
+    segment : Segment
+        A merit river segment
+    edge_counts : dict[str, int]
+        The number of edges to break the segment into
+    segment_das : dict[str, float]
+        A dictionary containing the drainage areas of each segment
+
+    Returns
+    -------
+    list[Edge]
+        A list of edges
+    """
     edges = []
     num_edges = edge_counts[segment.id]
     up_ids = get_upstream_ids(segment, edge_counts)
@@ -233,11 +302,11 @@ def segments_to_edges(segment, edge_counts, segment_das):
             ds=f"{segment.ds}_0",
             edge_id=f"{segment.id}_{0}",
         )
-        edge.coords = list(segment.transformed_line.interpolate(segment.edge_len * num_edges).coords) + [
-            segment.transformed_line.coords[-1]
+        edge.coords = list(segment.transformed_line.interpolate(segment.edge_len * num_edges).coords) + [  # type: ignore
+            segment.transformed_line.coords[-1]  # type: ignore
         ]
         edge.len = segment.edge_len
-        edge.calculate_sinuosity(edge.len)
+        edge.calculate_sinuosity(edge.len)  # type: ignore
         edge.len_dir = segment.edge_len / edge.sinuosity  # This is FAKE as we're setting the len manually
         edge.calculate_drainage_area(-1, segment_das)
         edges.append(edge)
@@ -259,22 +328,29 @@ def segments_to_edges(segment, edge_counts, segment_das):
                     ds=f"{segment.id}_{i + 1}" if i < num_edges - 1 else f"{segment.ds}_0",
                     edge_id=f"{segment.id}_{i}",
                 )
-            edge.coords = list(segment.transformed_line.interpolate(segment.edge_len * i).coords) + list(
-                segment.transformed_line.interpolate(segment.edge_len * (i + 1)).coords
+            edge.coords = list(segment.transformed_line.interpolate(segment.edge_len * i).coords) + list(  # type: ignore
+                segment.transformed_line.interpolate(segment.edge_len * (i + 1)).coords  # type: ignore
             )
             edge.len = segment.edge_len
-            edge.sinuosity = edge.calculate_sinuosity(segment.edge_len)
+            edge.sinuosity = edge.calculate_sinuosity(segment.edge_len)  # type: ignore
             edge.calculate_drainage_area(i, segment_das)
             edges.append(edge)
     [edge.convert_coords_to_wgs84() for edge in edges]  # Convert back to WGS84
     return edges
 
 
-def data_to_csv(data_list):
-    """
-    writing the edges list to disk
-    :param edges:
-    :return:
+def data_to_csv(data_list: list[Any]) -> pd.DataFrame:
+    """Writing the edges list to a csv
+
+    Parameters
+    ----------
+    data_list : list
+        List of Edge objects
+
+    Returns
+    -------
+    pd.DataFrame
+        Pandas DataFrame containing the edge data
     """
     data_dicts = []
     for data in data_list:
@@ -322,7 +398,7 @@ def _find_flowlines(cfg: DictConfig) -> Path:
     region_id = f"_{cfg.zone}_"
     matching_file = flowline_path.glob(f"*{region_id}*.shp")
     try:
-        found_file = [file for file in matching_file][0]
+        found_file = list(matching_file)[0]
         return found_file
-    except IndexError:
-        raise IndexError(f"No flowlines found using: *{region_id}*.shp")
+    except IndexError as e:
+        raise IndexError(f"No flowlines found using: *{region_id}*.shp") from e

@@ -2,7 +2,7 @@ import ast
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import geopandas as gpd
 import numpy as np
@@ -15,6 +15,20 @@ log = logging.getLogger(__name__)
 
 
 def calculate_drainage_area_for_all_edges(edges, segment_das):
+    """_summary_
+
+    Parameters
+    ----------
+    edges : _type_
+        _description_
+    segment_das : _type_
+        _description_
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
     num_edges = len(edges)
     up_ids = edges[0]["up"]
     if up_ids:
@@ -35,7 +49,7 @@ def calculate_drainage_area_for_all_edges(edges, segment_das):
     return edges
 
 
-def calculate_num_edges(length: float, dx: float, buffer: float) -> Tuple:
+def calculate_num_edges(length: float, dx: float, buffer: float) -> tuple:
     """
     Calculate the number of edges and the length of each edge for a given segment.
 
@@ -88,7 +102,7 @@ def calculate_num_edges(length: float, dx: float, buffer: float) -> Tuple:
     return (int(num_edges), edge_len)
 
 
-def create_edge_json(segment_row: pd.Series, up=None, ds=None, edge_id=None) -> Dict[str, Any]:
+def create_edge_json(segment_row: pd.Series, up=None, ds=None, edge_id=None) -> dict[str, Any]:
     """
     Create a JSON representation of an edge based on segment data.
 
@@ -128,7 +142,7 @@ def create_edge_json(segment_row: pd.Series, up=None, ds=None, edge_id=None) -> 
     return edge
 
 
-def create_segment(row: pd.Series, crs: Any, dx: int, buffer: float) -> Dict[str, Any]:
+def create_segment(row: pd.Series, crs: Any, dx: int, buffer: float) -> dict[str, Any]:
     """
     Create a dictionary representation of a segment using its row data.
 
@@ -155,26 +169,27 @@ def create_segment(row: pd.Series, crs: Any, dx: int, buffer: float) -> Dict[str
     return dict(create_segment_dict(row, row.geometry, crs, dx, buffer))
 
 
-def string_to_dict_builder(input_str, crs_info):
-    """
-    Convert a string representation of a dictionary to an actual dictionary
-    using a modular approach for different sections.
+def string_to_dict_builder(input_str: str, crs_info: str) -> dict[str, Any]:
+    """Convert a string representation of a dictionary to an actual dictionary using a modular approach for different sections.
 
-    Parameters:
-    input_str (str): The string to be converted.
-    crs_info (str): The CRS information to be inserted.
+    Parameters
+    ----------
+    input_str : str
+        The string to be converted.
+    crs_info : str
+        The CRS information to be inserted.
 
-    Returns:
-    dict: The resulting dictionary.
+    Returns
+    -------
+    dict[str, Any]
+        The resulting dictionary.
     """
 
     def handle_list(section):
-        """
-        Handles the parsing of list structures.
-        """
+        """Handles the parsing of list structures."""
         try:
             return ast.literal_eval(section.strip())
-        except Exception as e:
+        except ValueError as e:
             return f"Error parsing list: {e}"
 
     result_dict = {}
@@ -196,11 +211,11 @@ def string_to_dict_builder(input_str, crs_info):
 
 def create_segment_dict(
     row: pd.Series,
-    segment_coords: List[Tuple[float, float]],
+    segment_coords: list[tuple[float, float]],
     crs: Any,
     dx: int,
     buffer: float,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Create a dictionary representation of a segment with various attributes.
 
@@ -301,17 +316,17 @@ def find_flowlines(cfg: DictConfig) -> Path:
     region_id = f"_{cfg.zone}_"
     matching_file = flowline_path.glob(f"*{region_id}*.shp")
     try:
-        found_file = [file for file in matching_file][0]
+        found_file = list(matching_file)[0]
         return found_file
-    except IndexError:
-        raise IndexError(f"No flowlines found using: *{region_id}*.shp")
+    except IndexError as e:
+        raise IndexError(f"No flowlines found using: *{region_id}*.shp") from e
 
 
 def many_segment_to_edge_partition(
     df: pd.DataFrame,
-    edge_info: Dict[str, Any],
-    num_edge_dict: Dict[str, Any],
-    segment_das: Dict[str, float],
+    edge_info: dict[str, Any],
+    num_edge_dict: dict[str, Any],
+    segment_das: dict[str, float],
 ) -> pd.DataFrame:
     """
     Process a DataFrame partition to create edges for segments with multiple edges.
@@ -372,9 +387,9 @@ def many_segment_to_edge_partition(
 
 def singular_segment_to_edge_partition(
     df: pd.DataFrame,
-    edge_info: Dict[str, Any],
-    num_edge_dict: Dict[str, Any],
-    segment_das: Dict[str, float],
+    edge_info: dict[str, Any],
+    num_edge_dict: dict[str, Any],
+    segment_das: dict[str, float],
 ) -> pd.DataFrame:
     """
     Process a DataFrame partition to create edges for each segment.
@@ -445,19 +460,23 @@ def _plot_gdf(gdf: gpd.GeoDataFrame) -> None:
     plt.show()
 
 
-def sort_based_on_keys(array_to_sort, keys, segment_sorted_index):
+def sort_based_on_keys(array_to_sort: np.ndarray, keys: np.ndarray, segment_sorted_index: np.ndarray) -> np.ndarray:
     """
-    Sort 'array_to_sort' based on the order defined in 'keys'.
-    For each key, find rows in 'segment_sorted_index' where this value occurs.
-    If there are multiple occurrences, sort these rows further by ID.
+    Sort 'array_to_sort' based on the order defined in 'keys'. For each key, find rows in 'segment_sorted_index' where this value occurs. If there are multiple occurrences, sort these rows further by ID.
 
-    Args:
-    array_to_sort: The array to be sorted.
-    keys: The array of keys to sort by.
-    segment_sorted_index: The index array to match keys against.
+    Parameters
+    ----------
+    array_to_sort: np.ndarray
+        The array to be sorted.
+    keys: np.ndarray
+        The array of keys to sort by.
+    segment_sorted_index: np.ndarray
+        The index array to match keys against.
 
-    Returns:
-    A sorted version of 'array_to_sort'.
+    Returns
+    -------
+    np.ndarray
+        A sorted version of 'array_to_sort'.
     """
     sorted_array = []
     for key in tqdm(
@@ -474,6 +493,22 @@ def sort_based_on_keys(array_to_sort, keys, segment_sorted_index):
     return np.array(sorted_array)
 
 
-def sort_xarray_dataarray(da, keys, segment_sorted_index):
+def sort_xarray_dataarray(da: xr.DataArray, keys: np.ndarray, segment_sorted_index: np.ndarray) -> xr.DataArray:
+    """Sorts the data in a DataArray based on the keys and segment_sorted_index.
+
+    Parameters
+    ----------
+    da : xr.DataArray
+        The provided data array
+    keys : np.ndarray
+        The keys to sort by
+    segment_sorted_index : np.ndarray
+        the ordered segments indices
+
+    Returns
+    -------
+    xr.DataArray
+        _description_
+    """
     sorted_data = sort_based_on_keys(da.values, keys, segment_sorted_index)
     return xr.DataArray(sorted_data, dims=da.dims, coords=da.coords)

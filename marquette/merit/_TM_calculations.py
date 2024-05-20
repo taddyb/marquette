@@ -99,7 +99,7 @@ def create_MERIT_FLOW_TM(cfg: DictConfig, edges: zarr.Group) -> None:
     ):
         indices = np.where(merit_basin == basin_id)[0]
 
-        total_length = np.sum(river_graph_len[indices]) # type: ignore
+        total_length = np.sum(river_graph_len[indices])  # type: ignore
         if total_length == 0:
             print("Basin not found:", basin_id)
             continue
@@ -146,7 +146,7 @@ def join_geospatial_data(cfg: DictConfig) -> pd.DataFrame:
         how="left",
         predicate="intersects",
     )
-    joined_gdf.set_geometry("geometry", inplace=True) # type: ignore
+    joined_gdf.set_geometry("geometry", inplace=True)  # type: ignore
     return joined_gdf
 
 

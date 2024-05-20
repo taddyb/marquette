@@ -241,7 +241,7 @@ def create_N(cfg: DictConfig, edges: zarr.Group) -> None:
         else:
             zone_csv = map_gages_to_zone(cfg, edges)
         if zone_csv is not False:
-            create_gage_connectivity(cfg, edges, zone_root, zone_csv)
+            create_gage_connectivity(cfg, edges, zone_root, zone_csv)  # type: ignore
             log.info("All sparse gage matrices are created")
 
 
