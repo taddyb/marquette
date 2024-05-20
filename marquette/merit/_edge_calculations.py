@@ -262,7 +262,7 @@ def create_segment_dict(
     return segment_dict
 
 
-def get_upstream_ids(row: pd.Series, edge_info: dict):
+def get_upstream_ids(row: pd.Series, edge_info: dict) -> list[str]:
     """
     Generate upstream IDs for a segment.
 
