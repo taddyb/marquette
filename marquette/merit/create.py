@@ -31,7 +31,7 @@ from marquette.merit._streamflow_conversion_functions import (
 from marquette.merit._TM_calculations import (
     create_HUC_MERIT_TM,
     create_MERIT_FLOW_TM,
-    create_sparse_MERIT_FLOW_TM,
+    # create_sparse_MERIT_FLOW_TM,
     join_geospatial_data,
 )
 
