@@ -2,7 +2,7 @@
 
 !!! info 
 
-    This page breaks down the `create_edges()` function
+    This page documentst the `create_edges()` function
 
 ## Discretization of MERIT flowlines
 
