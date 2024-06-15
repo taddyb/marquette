@@ -1,0 +1,12 @@
+site_name: Marquette
+site_url: https://taddyb.github.io/marquette
+theme:
+  name: material
+
+repo_name: Marquette
+repo_url: https://github.com/taddyb/marquette
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences

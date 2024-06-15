@@ -3,10 +3,20 @@
 [![Python](https://img.shields.io/pypi/pyversions/msmhelper)]()
 ![image](https://github.com/taddyb/marquette/assets/16233925/4a7b8745-7576-4150-bf4a-9469d44a9425)
 
-A river mapping library to take .shp files and create River Network CSVs
+Marquette is a tool designed to format Hydrofabric data such that it can be used for [differentiable river routing](https://github.com/mhpi/dMC-dev). Currently the following hydrofabric inputs are supported:
+- [MERIT-BASINS](https://www.reachhydro.org/home/params/merit-basins)
 
-## Quick Start:
-1. `conda create -n marquette python=3.11`
-2. `conda activate marquette`
-3. `pip install -r requirements.txt`
+## Citation:
 
+Official citation coming soon. For now, use:
+
+```bibtex
+@misc{Bindas2024,
+  author = {Bindas, T},
+  title = {Marquette: A hydrofabric formatting tool},
+  year = {2024},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/taddyb/marquette}},
+}
+```
