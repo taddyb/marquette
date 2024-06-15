@@ -147,11 +147,17 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         # filter based on large-list of gage_locations
         gage_locations_df = pd.read_csv(cfg.create_N.obs_dataset)
         try:
-            gage_ids = gage_locations_df["id"].astype(str).apply(lambda x: x.zfill(8))
+            if cfg.create_N.pad_gage_id:
+                gage_ids = gage_locations_df["id"].astype(str).apply(lambda x: x.zfill(8))
+            else:
+                gage_ids = gage_locations_df["id"]
         except KeyError:
-            gage_ids = (
-                gage_locations_df["STAT_ID"].astype(str).apply(lambda x: x.zfill(8))
-            )
+            if cfg.create_N.pad_gage_id:
+                gage_ids = (
+                    gage_locations_df["STAT_ID"].astype(str).apply(lambda x: x.zfill(8))
+                )
+            else: 
+                gage_ids = gage_locations_df["STAT_ID"]
         gdf = gdf[gdf["STAID"].isin(gage_ids)]
     gdf["COMID"] = gdf["COMID"].astype(int)
     filtered_gdf = filter_by_comid_prefix(gdf, cfg.zone)
@@ -186,6 +192,8 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         result_df["LAT_GAGE"] = result_df["Latitude"]
     except KeyError:
         pass
+    if "HUC02" not in result_df.columns:
+        result_df["HUC02"] = 0
 
     columns = [
         "STAID",

@@ -36,12 +36,12 @@ def main(cfg: DictConfig) -> None:
 
         log.info(f"Creating MERIT {cfg.zone} Connectivity Matrix (N) for gages")
         create_N(cfg, edges)
+        
+        log.info(f"Mapping {cfg.zone} Streamflow to TMs")
+        create_TMs(cfg, edges)
 
         log.info("Converting Streamflow to zarr")
         write_streamflow(cfg, edges)
-
-        log.info(f"Mapping {cfg.zone} Streamflow to Nodes/Edges")
-        create_TMs(cfg, edges)
 
         log.info("Running Data Post-Processing Extensions")
         run_extensions(cfg, edges)
