@@ -1,0 +1,15 @@
+{
+  "arch": "x86_64",
+  "build": "py311h06a4308_0",
+  "build_number": 0,
+  "depends": [
+    "python >=3.11,<3.12.0a0"
+  ],
+  "license": "MIT",
+  "license_family": "MIT",
+  "name": "setuptools",
+  "platform": "linux",
+  "subdir": "linux-64",
+  "timestamp": 1715024182643,
+  "version": "69.5.1"
+}

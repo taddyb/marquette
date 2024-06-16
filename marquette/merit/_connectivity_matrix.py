@@ -148,7 +148,9 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         gage_locations_df = pd.read_csv(cfg.create_N.obs_dataset)
         try:
             if cfg.create_N.pad_gage_id:
-                gage_ids = gage_locations_df["id"].astype(str).apply(lambda x: x.zfill(8))
+                gage_ids = (
+                    gage_locations_df["id"].astype(str).apply(lambda x: x.zfill(8))
+                )
             else:
                 gage_ids = gage_locations_df["id"]
         except KeyError:
@@ -156,7 +158,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
                 gage_ids = (
                     gage_locations_df["STAT_ID"].astype(str).apply(lambda x: x.zfill(8))
                 )
-            else: 
+            else:
                 gage_ids = gage_locations_df["STAT_ID"]
         gdf = gdf[gdf["STAID"].isin(gage_ids)]
     gdf["COMID"] = gdf["COMID"].astype(int)

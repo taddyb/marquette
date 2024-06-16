@@ -20,3 +20,6 @@ Official citation coming soon. For now, use:
   howpublished = {\url{https://github.com/taddyb/marquette}},
 }
 ```
+
+## cuGRaph
+`https://docs.rapids.ai/install`

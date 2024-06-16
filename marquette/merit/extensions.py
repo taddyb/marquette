@@ -1,7 +1,10 @@
 import logging
 from pathlib import Path
 
+import cugraph
+import cudf
 import geopandas as gpd
+import networkx as nx
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -10,62 +13,6 @@ from omegaconf import DictConfig
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
-
-
-# class Direction(Enum):
-#     up = "up"
-#     down = "down"
-
-
-# def traverse(df: pl.DataFrame, direction: Direction, count=1):
-# TODO: Get this to work
-#     if direction == Direction.up:
-#         # Using only the up1 dir as we know it always exists
-#         _traverse = "up1"
-#         renamed_col = "NextDownID"
-#     elif direction == Direction.down:
-#         _traverse = "NextDownID"
-#         renamed_col = "up1"
-#     else:
-#         raise ValueError("Invalid direction. Look at the Direction Enum")
-#     traverse_df = df.clone()
-#     for _ in range(count):
-#         traverse_df = traverse_df.rename(
-#             {"COMID": "_COMID"}
-#         ).with_columns(
-#             pl.when(pl.col(_traverse) == 0)
-#             .then(pl.col("_COMID"))
-#             .otherwise(pl.col(renamed_col))
-#             .alias("COMID")
-#         )
-#         traverse_df = df.join(other=traverse_df, on="COMID", how="semi", join_nulls=True)
-#         traverse_df = traverse_df.drop("_COMID")
-#     return traverse_df
-
-
-# def spatial_nan_filter(
-#     df: pl.DataFrame,
-# ) -> pl.DataFrame:
-#     """
-#     Filling NaN values based on the predictions up or downstream
-#     Using the min value of the attribute is no Up or Downstream values are available
-#     """
-#     # TODO: Get this to work
-#     if df.null_count().to_numpy().sum() == 0:
-#         return df
-#     else:
-#         filled_df = traverse(
-#             df, Direction.down, count=3
-#         )
-#         if df.null_count().to_numpy().sum():
-#             filled_df = traverse(
-#                 filled_df, Direction.up
-#             )
-#             if np.isnan(fill_value):
-#                 fill_value = np.nanmin(df[attribute])
-#             nan_fill[i] = fill_value
-#         _attr_mapped[mask] = nan_fill
-#         return _attr_mapped
 
 
 def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
@@ -274,3 +221,61 @@ def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> N
         name="incremental_drainage_area",
         data=result.select(pl.col("incremental_drainage_area")).to_numpy().squeeze(),
     )
+
+
+def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
+    streamflow_group = Path(
+        f"/projects/mhpi/data/MERIT/streamflow/zarr/{cfg.create_streamflow.version}/{cfg.zone}"
+    )
+    if streamflow_group.exists() is False:
+        raise FileNotFoundError("streamflow_group data not found")
+    streamflow_zarr = zarr.open_group(streamflow_group, mode="r")
+    dim_0 : int = streamflow_zarr.streamflow.shape[0]  # type: ignore
+    dim_1 : int = edges.id.shape[0]  # type: ignore    
+    q_prime_sum_data = np.zeros([dim_0, dim_1])
+    edge_to_ds_idx_mapping = {i: v for i, v in enumerate(edges.segment_sorting_index[:])}
+    ds_to_edge_idx_mapping = {v: i for i, v in enumerate(edges.segment_sorting_index[:])}
+    index_mapping = {v: i for i, v in enumerate(edges.id[:])}
+    idx_to_comid = {i: v for i, v in enumerate(edges.merit_basin[:])}
+    comid_to_idx = {v: i for i, v in enumerate(edges.merit_basin[:])}
+    dol = {}
+    for idx, edge_id in enumerate(
+        tqdm(
+                edges.id[:],
+                desc="creating graph in dictionary form",
+                ascii=True,
+                ncols=140,
+            )
+        ):
+        if edges.ds[idx] != "0_0":
+            val = dol.get(index_mapping[edge_id], [])
+            val.append(index_mapping[edges.ds[idx]])
+            dol[index_mapping[edge_id]] = val
+    G = nx.from_dict_of_lists(dol, create_using=nx.DiGraph)
+    upstream_indices = np.where(edges.up[:] == '[]')[0]
+    for idx in tqdm(
+        upstream_indices,
+        desc="reading graph data and calculating q_prime_summation",
+        ascii=True,
+        ncols=140,
+    ):
+        try:
+            # Iterating through all basins to determine connectivity
+            _G = nx.dfs_tree(G, source=idx)
+            prev_data = np.zeros([dim_0])
+            for edge in _G.nodes():
+                ds_idx = edge_to_ds_idx_mapping[edge]
+                streamflow_prediction : np.ndarray = streamflow_zarr.streamflow[:, ds_idx]  # type: ignore
+                q_prime_sum_data[:, edge] = prev_data + streamflow_prediction
+                prev_data = q_prime_sum_data[:, edge]
+        except nx.exception.NetworkXError:
+            # This means there is no connectivity from this basin. It's one-node graph
+            ds_idx = edge_to_ds_idx_mapping[idx]
+            streamflow_prediction : np.ndarray = streamflow_zarr.streamflow[:, ds_idx]  # type: ignore
+            q_prime_sum_data[:, idx] = streamflow_prediction
+
+    edges["summed_q_prime"] = q_prime_sum_data
+    
+    # 73005292_0
+    #gauge: 01536500
+    

@@ -1,0 +1,23 @@
+{
+  "arch": "x86_64",
+  "build": "py311h06a4308_0",
+  "build_number": 0,
+  "channel": "https://repo.anaconda.com/pkgs/main/linux-64",
+  "constrains": [],
+  "depends": [
+    "python >=3.11,<3.12.0a0"
+  ],
+  "fn": "setuptools-69.5.1-py311h06a4308_0.conda",
+  "legacy_bz2_md5": "8bfb9f42492b3b53b8151d77e51c75d8",
+  "license": "MIT",
+  "license_family": "MIT",
+  "md5": "0989470c81841dfcb22c7bbb40f543c5",
+  "name": "setuptools",
+  "platform": "linux",
+  "sha256": "aa64dd645a0ca5a4b35f7e35014d27f8e9cf80d135a7897d68bdb41bbd140c8a",
+  "size": 1391087,
+  "subdir": "linux-64",
+  "timestamp": 1715024182643,
+  "url": "https://repo.anaconda.com/pkgs/main/linux-64/setuptools-69.5.1-py311h06a4308_0.conda",
+  "version": "69.5.1"
+}
