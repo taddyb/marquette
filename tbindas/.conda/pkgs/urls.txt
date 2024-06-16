@@ -1,6 +1,0 @@
-https://repo.anaconda.com/pkgs/main/linux-64/wheel-0.43.0-py311h06a4308_0.conda
-https://repo.anaconda.com/pkgs/main/linux-64/ca-certificates-2024.3.11-h06a4308_0.conda
-https://repo.anaconda.com/pkgs/main/linux-64/setuptools-69.5.1-py311h06a4308_0.conda
-https://repo.anaconda.com/pkgs/main/linux-64/pip-24.0-py311h06a4308_0.conda
-https://repo.anaconda.com/pkgs/main/linux-64/openssl-3.0.14-h5eee18b_0.conda
-https://repo.anaconda.com/pkgs/main/linux-64/python-3.11.9-h955ad1f_0.conda
