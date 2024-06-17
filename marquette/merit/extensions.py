@@ -1,8 +1,9 @@
 import logging
 from pathlib import Path
 
-import cugraph
-import cudf
+# import cugraph as cnx
+# import cudf
+import cupy as cp
 import geopandas as gpd
 import networkx as nx
 import numpy as np
@@ -223,59 +224,63 @@ def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> N
     )
 
 
-def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
+def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:   
+    # 73005292_0
+    #gauge: 01536500
     streamflow_group = Path(
         f"/projects/mhpi/data/MERIT/streamflow/zarr/{cfg.create_streamflow.version}/{cfg.zone}"
     )
     if streamflow_group.exists() is False:
         raise FileNotFoundError("streamflow_group data not found")
-    streamflow_zarr = zarr.open_group(streamflow_group, mode="r")
-    dim_0 : int = streamflow_zarr.streamflow.shape[0]  # type: ignore
+    streamflow_zarr: zarr.Group = zarr.open_group(streamflow_group, mode="r")
+    streamflow_data = cp.array(streamflow_zarr.streamflow[:])
+    _, counts = cp.unique(edges.segment_sorting_index[:], return_counts=True)  # type: ignore
+    dim_0 : int = streamflow_data.shape[0]  # type: ignore
     dim_1 : int = edges.id.shape[0]  # type: ignore    
-    q_prime_sum_data = np.zeros([dim_0, dim_1])
-    edge_to_ds_idx_mapping = {i: v for i, v in enumerate(edges.segment_sorting_index[:])}
-    ds_to_edge_idx_mapping = {v: i for i, v in enumerate(edges.segment_sorting_index[:])}
-    index_mapping = {v: i for i, v in enumerate(edges.id[:])}
-    idx_to_comid = {i: v for i, v in enumerate(edges.merit_basin[:])}
-    comid_to_idx = {v: i for i, v in enumerate(edges.merit_basin[:])}
-    dol = {}
-    for idx, edge_id in enumerate(
-        tqdm(
-                edges.id[:],
-                desc="creating graph in dictionary form",
-                ascii=True,
-                ncols=140,
-            )
-        ):
-        if edges.ds[idx] != "0_0":
-            val = dol.get(index_mapping[edge_id], [])
-            val.append(index_mapping[edges.ds[idx]])
-            dol[index_mapping[edge_id]] = val
-    G = nx.from_dict_of_lists(dol, create_using=nx.DiGraph)
-    upstream_indices = np.where(edges.up[:] == '[]')[0]
-    for idx in tqdm(
-        upstream_indices,
-        desc="reading graph data and calculating q_prime_summation",
+    q_prime_sum_data = cp.zeros([dim_0, dim_1]).transpose(1, 0)
+    edge_ids = edges.id[:]
+    edge_index_mapping = {v: i for i, v in enumerate(edge_ids)}
+   
+    # Generating a networkx DiGraph object
+    df_path = Path(f"{cfg.create_edges.edges}").parent / f"{cfg.zone}_graph_df.csv"
+    if df_path.exists():
+        df = pd.read_csv(df_path)
+    else:
+        source = []
+        target = []
+        for idx, _ in enumerate(
+            tqdm(
+                    edges.id[:],
+                    desc="creating graph in dictionary form",
+                    ascii=True,
+                    ncols=140,
+                )
+            ):
+            if edges.ds[idx] != "0_0":
+                source.append(idx)
+                target.append(edge_index_mapping[edges.ds[idx]])
+        df = pd.DataFrame({"source": source, "target": target})
+        df.to_csv(df_path, index=False)
+    G = nx.from_pandas_edgelist(df, create_using=nx.DiGraph(),)
+    
+    for idx, _ in enumerate(tqdm(
+        edges.id,
+        desc="calculating q` sum data",
         ascii=True,
         ncols=140,
-    ):
+    )):
+        streamflow_ds_id = edges.segment_sorting_index[idx]
+        num_edges_in_comid = counts[streamflow_ds_id]
         try:
-            # Iterating through all basins to determine connectivity
-            _G = nx.dfs_tree(G, source=idx)
-            prev_data = np.zeros([dim_0])
-            for edge in _G.nodes():
-                ds_idx = edge_to_ds_idx_mapping[edge]
-                streamflow_prediction : np.ndarray = streamflow_zarr.streamflow[:, ds_idx]  # type: ignore
-                q_prime_sum_data[:, edge] = prev_data + streamflow_prediction
-                prev_data = q_prime_sum_data[:, edge]
+            graph = nx.descendants(G, idx, backend="cugraph")
+            graph.add(idx)  # Adding the idx to ensure it's counted
+            downstream_idx = np.array(list(graph))  # type: ignore
+            q_prime_sum_data[downstream_idx] += (streamflow_data[:, streamflow_ds_id] / num_edges_in_comid)  # type: ignore
         except nx.exception.NetworkXError:
             # This means there is no connectivity from this basin. It's one-node graph
-            ds_idx = edge_to_ds_idx_mapping[idx]
-            streamflow_prediction : np.ndarray = streamflow_zarr.streamflow[:, ds_idx]  # type: ignore
-            q_prime_sum_data[:, idx] = streamflow_prediction
+            q_prime_sum_data[idx] = (streamflow_data[:, streamflow_ds_id]  / num_edges_in_comid)
 
-    edges["summed_q_prime"] = q_prime_sum_data
-    
-    # 73005292_0
-    #gauge: 01536500
-    
+    edges.array(
+        name="summed_q_prime",
+        data=cp.asnumpy(q_prime_sum_data).transpose(1, 0),
+    )    

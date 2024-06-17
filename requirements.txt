@@ -1,4 +1,4 @@
-# git+https://github.com/ivirshup/binsparse-python.git@main
+git+https://github.com/ivirshup/binsparse-python.git@main
 dask[complete]
 polars
 dask-expr
@@ -11,6 +11,7 @@ hydra-core
 jupyter
 jupyterlab
 matplotlib
+networkx
 numpy
 omegaconf
 pandas

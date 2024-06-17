@@ -4,7 +4,7 @@ zone: 73
 create_edges:
   buffer: 0.3334
   dx: 2000
-  edges: ${data_path}/zarr/graph/edges/
+  edges: ${data_path}/zarr/graph/CONUS/edges/
   flowlines: ${data_path}/raw/flowlines
 create_N:
   run_whole_zone: False
