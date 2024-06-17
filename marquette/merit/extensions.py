@@ -261,7 +261,7 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
                 target.append(edge_index_mapping[edges.ds[idx]])
         df = pd.DataFrame({"source": source, "target": target})
         df.to_csv(df_path, index=False)
-    G = nx.from_pandas_edgelist(df, create_using=nx.DiGraph(),)
+    G = nx.from_pandas_edgelist(df=df, create_using=nx.DiGraph(),)
     
     for idx, _ in enumerate(tqdm(
         edges.id,
