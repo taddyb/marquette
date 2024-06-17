@@ -1,7 +1,11 @@
 import logging
 from pathlib import Path
 
+# import cugraph as cnx
+# import cudf
+import cupy as cp
 import geopandas as gpd
+import networkx as nx
 import numpy as np
 import pandas as pd
 import polars as pl
@@ -10,62 +14,6 @@ from omegaconf import DictConfig
 from tqdm import tqdm
 
 log = logging.getLogger(__name__)
-
-
-# class Direction(Enum):
-#     up = "up"
-#     down = "down"
-
-
-# def traverse(df: pl.DataFrame, direction: Direction, count=1):
-# TODO: Get this to work
-#     if direction == Direction.up:
-#         # Using only the up1 dir as we know it always exists
-#         _traverse = "up1"
-#         renamed_col = "NextDownID"
-#     elif direction == Direction.down:
-#         _traverse = "NextDownID"
-#         renamed_col = "up1"
-#     else:
-#         raise ValueError("Invalid direction. Look at the Direction Enum")
-#     traverse_df = df.clone()
-#     for _ in range(count):
-#         traverse_df = traverse_df.rename(
-#             {"COMID": "_COMID"}
-#         ).with_columns(
-#             pl.when(pl.col(_traverse) == 0)
-#             .then(pl.col("_COMID"))
-#             .otherwise(pl.col(renamed_col))
-#             .alias("COMID")
-#         )
-#         traverse_df = df.join(other=traverse_df, on="COMID", how="semi", join_nulls=True)
-#         traverse_df = traverse_df.drop("_COMID")
-#     return traverse_df
-
-
-# def spatial_nan_filter(
-#     df: pl.DataFrame,
-# ) -> pl.DataFrame:
-#     """
-#     Filling NaN values based on the predictions up or downstream
-#     Using the min value of the attribute is no Up or Downstream values are available
-#     """
-#     # TODO: Get this to work
-#     if df.null_count().to_numpy().sum() == 0:
-#         return df
-#     else:
-#         filled_df = traverse(
-#             df, Direction.down, count=3
-#         )
-#         if df.null_count().to_numpy().sum():
-#             filled_df = traverse(
-#                 filled_df, Direction.up
-#             )
-#             if np.isnan(fill_value):
-#                 fill_value = np.nanmin(df[attribute])
-#             nan_fill[i] = fill_value
-#         _attr_mapped[mask] = nan_fill
-#         return _attr_mapped
 
 
 def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
@@ -274,3 +222,87 @@ def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> N
         name="incremental_drainage_area",
         data=result.select(pl.col("incremental_drainage_area")).to_numpy().squeeze(),
     )
+
+
+def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:   
+    """Creates Q` summed data for all edges in a given MERIT zone
+    
+    Parameters:
+    ----------
+    cfg: DictConfig
+        The configuration object.
+    edges: zarr.Group
+        The edges group in the MERIT zone
+    """
+    n = 2  # number of splits (used for reducing memory load)
+    cp.cuda.runtime.setDevice(2)  # manually setting the device to 2
+    
+    streamflow_group = Path(
+        f"/projects/mhpi/data/MERIT/streamflow/zarr/{cfg.create_streamflow.version}/{cfg.zone}"
+    )
+    if streamflow_group.exists() is False:
+        raise FileNotFoundError("streamflow_group data not found")
+    streamflow_zarr: zarr.Group = zarr.open_group(streamflow_group, mode="r")
+    streamflow_time = streamflow_zarr.time[:]
+    _, counts = cp.unique(edges.segment_sorting_index[:], return_counts=True)  # type: ignore
+    dim_0 : int = streamflow_zarr.time.shape[0]  # type: ignore
+    dim_1 : int = edges.id.shape[0]  # type: ignore    
+    edge_ids = edges.id[:]
+    edge_index_mapping = {v: i for i, v in enumerate(edge_ids)}
+
+    q_prime_np = np.zeros([dim_0, dim_1]).transpose(1, 0)
+    streamflow_data = cp.array(streamflow_zarr.streamflow[:])
+
+   
+    # Generating a networkx DiGraph object
+    df_path = Path(f"{cfg.create_edges.edges}").parent / f"{cfg.zone}_graph_df.csv"
+    if df_path.exists():
+        df = pd.read_csv(df_path)
+    else:
+        source = []
+        target = []
+        for idx, _ in enumerate(
+            tqdm(
+                    edges.id[:],
+                    desc="creating graph in dictionary form",
+                    ascii=True,
+                    ncols=140,
+                )
+            ):
+            if edges.ds[idx] != "0_0":
+                source.append(idx)
+                target.append(edge_index_mapping[edges.ds[idx]])
+        df = pd.DataFrame({"source": source, "target": target})
+        df.to_csv(df_path, index=False)
+    G = nx.from_pandas_edgelist(df=df, create_using=nx.DiGraph(),)
+    
+    time_split = np.array_split(streamflow_time, n)  #type: ignore
+    for idx, time_range in enumerate(time_split):
+        q_prime_cp = cp.zeros([time_range.shape[0], dim_1]).transpose(1, 0)
+
+        for jdx, _ in enumerate(tqdm(
+            edge_ids,
+            desc=f"calculating q` sum data for part {idx}",
+            ascii=True,
+            ncols=140,
+        )):
+            streamflow_ds_id = edges.segment_sorting_index[jdx]
+            num_edges_in_comid = counts[streamflow_ds_id]
+            try:
+                graph = nx.descendants(G, jdx, backend="cugraph")
+                graph.add(jdx)  # Adding the idx to ensure it's counted
+                downstream_idx = np.array(list(graph))  # type: ignore
+                q_prime_cp[downstream_idx] += (streamflow_data[time_range, streamflow_ds_id] / num_edges_in_comid)  # type: ignore
+            except nx.exception.NetworkXError:
+                # This means there is no connectivity from this basin. It's one-node graph
+                q_prime_cp[jdx] = (streamflow_data[time_range, streamflow_ds_id]  / num_edges_in_comid)
+                
+        print("Saving GPU Memory to CPU; freeing GPU Memory")
+        q_prime_np[:, time_range] = cp.asnumpy(q_prime_cp)
+        del q_prime_cp
+        cp.get_default_memory_pool().free_all_blocks()
+        
+    edges.array(
+        name="summed_q_prime",
+        data=q_prime_np.transpose(1, 0),
+    )    

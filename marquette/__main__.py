@@ -2,6 +2,7 @@ import logging
 import time
 
 import hydra
+import zarr
 from omegaconf import DictConfig
 
 log = logging.getLogger(__name__)
@@ -37,11 +38,11 @@ def main(cfg: DictConfig) -> None:
         log.info(f"Creating MERIT {cfg.zone} Connectivity Matrix (N) for gages")
         create_N(cfg, edges)
 
+        log.info(f"Mapping {cfg.zone} Streamflow to TMs")
+        create_TMs(cfg, edges)
+
         log.info("Converting Streamflow to zarr")
         write_streamflow(cfg, edges)
-
-        log.info(f"Mapping {cfg.zone} Streamflow to Nodes/Edges")
-        create_TMs(cfg, edges)
 
         log.info("Running Data Post-Processing Extensions")
         run_extensions(cfg, edges)
@@ -52,7 +53,7 @@ def main(cfg: DictConfig) -> None:
         log.error(f"incorrect name specified: {cfg.name}")
 
 
-def run_extensions(cfg, edges):
+def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
     """
     The function for running post-processing data extensions
 
@@ -65,7 +66,7 @@ def run_extensions(cfg, edges):
 
         log.info("Adding soils information to your MERIT River Graph")
         if "ksat" in edges:
-            log.info("global_dhbv_static_inputs already exists in zarr format")
+            log.info("soils information already exists in zarr format")
         else:
             soils_data(cfg, edges)
     if "pet_forcing" in cfg.extensions:
@@ -73,7 +74,7 @@ def run_extensions(cfg, edges):
 
         log.info("Adding PET forcing to your MERIT River Graph")
         if "pet" in edges:
-            log.info("global_dhbv_static_inputs already exists in zarr format")
+            log.info("PET forcing already exists in zarr format")
         else:
             pet_forcing(cfg, edges)
     if "global_dhbv_static_inputs" in cfg.extensions:
@@ -93,6 +94,15 @@ def run_extensions(cfg, edges):
             log.info("incremental_drainage_area already exists in zarr format")
         else:
             calculate_incremental_drainage_area(cfg, edges)
+
+    if "q_prime_sum" in cfg.extensions:
+        from marquette.merit.extensions import calculate_q_prime_summation
+
+        log.info("Adding q_prime_sum to your MERIT River Graph")
+        if "summed_q_prime" in edges:
+            log.info("q_prime_sum already exists in zarr format")
+        else:
+            calculate_q_prime_summation(cfg, edges)
 
 
 if __name__ == "__main__":

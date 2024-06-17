@@ -194,7 +194,7 @@ def create_MERIT_FLOW_TM(
         for idx, proportion in zip(indices, proportions):
             column_index = np.where(river_graph_ids == river_graph_ids[idx])[0][0]
             data_np[i][column_index] = proportion
-    
+
     if cfg.create_TMs.MERIT.save_sparse:
         log.info("Writing to sparse matrix")
         gage_coo_root = zarr.open_group(Path(cfg.create_TMs.MERIT.TM), mode="a")

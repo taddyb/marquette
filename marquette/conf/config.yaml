@@ -1,31 +1,31 @@
 name: MERIT
 data_path: /projects/mhpi/data/${name}
-zone: 74
+zone: 73
 create_edges:
   buffer: 0.3334
   dx: 2000
-  edges: ${data_path}/zarr/graph/edges/
+  edges: ${data_path}/zarr/graph/CONUS/edges/
   flowlines: ${data_path}/raw/flowlines
 create_N:
   run_whole_zone: False
   drainage_area_treshold: 0.1
   filter_based_on_dataset: True
-  gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gage_9322_intersection.shp
+  gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gnn_dataset_v1_2.shp
   gage_coo_indices: ${data_path}/zarr/gage_coo_indices
-  pad_gage_id: True
-  obs_dataset: ${data_path}/gage_information/obs_csvs/all_gages_info.csv
-  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/all_gages_info_combined.csv
-  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}_all.csv
+  pad_gage_id: False
+  obs_dataset: ${data_path}/gage_information/obs_csvs/GRDC_point_data.csv
+  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gnn_formatted_basins.csv
+  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/gnn_zone_${zone}.csv
 create_TMs:
   MERIT:
     save_sparse: True
     TM: ${data_path}/zarr/TMs/sparse_MERIT_FLOWLINES_${zone}
     shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
 create_streamflow:
-  version: merit_conus_v3.0
+  version: merit_conus_v6.14
   data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}/${zone}
   obs_attributes: ${data_path}/gage_information/MERIT_basin_area_info
-  predictions: /projects/mhpi/yxs275/DM_output/dPL_local_daymet_new_attr_water_loss_v3_all_merit
+  predictions: /projects/mhpi/yxs275/DM_output/dPL_local_daymet_new_attr_water_loss_v6v10_random_batch_all_merit_forward/
   start_date: 01-01-1980
   end_date: 12-31-2020
 extensions:
@@ -33,6 +33,7 @@ extensions:
   - pet_forcing
   - global_dhbv_static_inputs
   - incremental_drainage_area
+  - q_prime_sum
 # Hydra Config ------------------------------------------------------------------------#
 hydra:
   help:
