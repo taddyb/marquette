@@ -99,7 +99,7 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         from marquette.merit.extensions import calculate_q_prime_summation
 
         log.info("Adding q_prime_sum to your MERIT River Graph")
-        if "q_prime_sum" in edges:
+        if "summed_q_prime" in edges:
             log.info("q_prime_sum already exists in zarr format")
         else:
             calculate_q_prime_summation(cfg, edges)
