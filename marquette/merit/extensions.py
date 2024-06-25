@@ -235,7 +235,7 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
         The edges group in the MERIT zone
     """
     n = 1 # number of splits (used for reducing memory load)
-    cp.cuda.runtime.setDevice(7)  # manually setting the device to 2
+    cp.cuda.runtime.setDevice(2)  # manually setting the device to 2
     
     streamflow_group = Path(
         f"/projects/mhpi/data/MERIT/streamflow/zarr/{cfg.create_streamflow.version}/{cfg.zone}"
