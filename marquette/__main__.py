@@ -5,7 +5,7 @@ import hydra
 import zarr
 from omegaconf import DictConfig
 
-log = logging.getLogger(__name__)
+log = logging.getLogger(name=__name__)
 
 
 @hydra.main(
@@ -24,12 +24,8 @@ def main(cfg: DictConfig) -> None:
     if cfg.name.lower() == "hydrofabric":
         raise ImportError("Hydrofabric functionality not yet supported")
     elif cfg.name.lower() == "merit":
-        from marquette.merit.create import (
-            create_edges,
-            create_N,
-            create_TMs,
-            write_streamflow,
-        )
+        from marquette.merit.create import (create_edges, create_N, create_TMs,
+                                            map_lake_points, write_streamflow)
 
         start = time.perf_counter()
         log.info(f"Creating MERIT {cfg.zone} River Graph")
@@ -43,6 +39,9 @@ def main(cfg: DictConfig) -> None:
 
         log.info("Converting Streamflow to zarr")
         write_streamflow(cfg, edges)
+
+        log.info("Mapping Lake Pour Points to Edges")
+        map_lake_points(cfg, edges)
 
         log.info("Running Data Post-Processing Extensions")
         run_extensions(cfg, edges)
@@ -87,7 +86,8 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
             global_dhbv_static_inputs(cfg, edges)
 
     if "incremental_drainage_area" in cfg.extensions:
-        from marquette.merit.extensions import calculate_incremental_drainage_area
+        from marquette.merit.extensions import \
+            calculate_incremental_drainage_area
 
         log.info("Adding edge/catchment area input data to your MERIT River Graph")
         if "incremental_drainage_area" in edges:

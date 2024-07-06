@@ -10,30 +10,19 @@ from dask.dataframe.io.io import from_pandas
 from omegaconf import DictConfig
 from tqdm import tqdm
 
-from marquette.merit._connectivity_matrix import (
-    create_gage_connectivity,
-    map_gages_to_zone,
-    new_zone_connectivity,
-)
+from marquette.merit._connectivity_matrix import (create_gage_connectivity,
+                                                  map_gages_to_zone,
+                                                  new_zone_connectivity)
 from marquette.merit._edge_calculations import (
-    calculate_num_edges,
-    create_segment,
-    find_flowlines,
-    many_segment_to_edge_partition,
-    singular_segment_to_edge_partition,
-    sort_xarray_dataarray,
-)
+    calculate_num_edges, create_segment, find_flowlines,
+    many_segment_to_edge_partition, singular_segment_to_edge_partition,
+    sort_xarray_dataarray)
+from marquette.merit._map_lake_points import _map_lake_points
 from marquette.merit._streamflow_conversion_functions import (
-    calculate_huc10_flow_from_individual_files,
-    calculate_merit_flow,
-    separate_basins,
-)
-from marquette.merit._TM_calculations import (
-    create_HUC_MERIT_TM,
-    create_MERIT_FLOW_TM,
-    # create_sparse_MERIT_FLOW_TM,
-    join_geospatial_data,
-)
+    calculate_huc10_flow_from_individual_files, calculate_merit_flow,
+    separate_basins)
+from marquette.merit._TM_calculations import (  # create_sparse_MERIT_FLOW_TM,
+    create_HUC_MERIT_TM, create_MERIT_FLOW_TM, join_geospatial_data)
 
 log = logging.getLogger(__name__)
 
@@ -242,3 +231,22 @@ def create_TMs(cfg: DictConfig, edges: zarr.Group) -> None:
         #     create_sparse_MERIT_FLOW_TM(cfg, edges)
         # else:
         create_MERIT_FLOW_TM(cfg, edges)
+
+
+def map_lake_points(cfg: DictConfig, edges: zarr.Group) -> None:
+    """Maps HydroLAKES pour points to the corresponding edge
+
+    Parameters
+    ----------
+    cfg: DictConfig
+        The configuration object
+    edges: zarr.Group
+        The zarr group containing the edges
+    """
+    reservoirs = zarr.open_group(Path(cfg.map_lake_points.edge_lakes), mode="a")
+    zone_root = reservoirs.require_group(cfg.zone)
+    if "Hylak_id" in zone_root:
+        log.info("HydroLakes Intersection already exists in Zarr format")
+    else:
+        log.info("Mapping HydroLakes Pour Points to Edges")
+        _map_lake_points(cfg, edges)
