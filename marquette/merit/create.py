@@ -243,9 +243,7 @@ def map_lake_points(cfg: DictConfig, edges: zarr.Group) -> None:
     edges: zarr.Group
         The zarr group containing the edges
     """
-    reservoirs = zarr.open_group(Path(cfg.map_lake_points.edge_lakes), mode="a")
-    zone_root = reservoirs.require_group(cfg.zone)
-    if "Hylak_id" in zone_root:
+    if "hylak_id" in edges:
         log.info("HydroLakes Intersection already exists in Zarr format")
     else:
         log.info("Mapping HydroLakes Pour Points to Edges")

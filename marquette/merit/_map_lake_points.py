@@ -1,19 +1,16 @@
 import logging
 from pathlib import Path
 
-import cuspatial
 import geopandas as gpd
-import pandas as pd
+import numpy as np
 import zarr
 from omegaconf import DictConfig
-from shapely.geometry import LineString
-from shapely.wkt import loads
+from tqdm import tqdm
 
 log = logging.getLogger(name=__name__)
 
-
 def _map_lake_points(cfg: DictConfig, edges: zarr.Group) -> None:
-    """A function that reads in a gdf of hydrolakes information, then intersects that point with edge data
+    """A function that reads in a gdf of hydrolakes information, finds its corresponding edge, then saves the data
     
     Parameters
     ----------
@@ -22,15 +19,44 @@ def _map_lake_points(cfg: DictConfig, edges: zarr.Group) -> None:
     edges: zarr.Group
         The zarr group containing the edges
     """
-    log.info("Reading in HydroLAKES data")
-    data_path = Path(cfg.map_lake_points.hydrolakes)
+    data_path = Path(cfg.map_lake_points.lake_points)
     if not data_path.exists():
-        msg = f"{data_path} does not exist"
+        msg = "Cannot find the lake points file"
         log.exception(msg)
         raise FileNotFoundError(msg)
     gdf = gpd.read_file(data_path)
-    reserviors_geoseries = cuspatial.GeoSeries(gdf["geometry"])
-    edge_coords = [loads(coords) for coords in edges.coords]
-    edge_geoseries = cuspatial.GeoSeries(gpd.GeoSeries(edge_coords))
-    log.info("Intersecting HydroLAKES data with edge data")
-    for reservoir in reserviors_geoseries
+    lake_comids = gdf["COMID"].astype(int).values
+    edges_comids : np.ndarray = edges["merit_basin"][:].astype(np.int32) # type: ignore
+    
+    hylak_id = np.full(len(edges_comids), -1, dtype=np.int32)
+    grand_id = np.full_like(edges_comids, -1, dtype=np.int32)
+    lake_area = np.full_like(edges_comids, -1, dtype=np.float32)
+    vol_total = np.full_like(edges_comids, -1, dtype=np.float32)
+    depth_avg = np.full_like(edges_comids, -1, dtype=np.float32)
+    
+    for idx, lake_id in enumerate(tqdm(
+        lake_comids,
+        desc="Mapping Lake COMIDS to edges",
+        ncols=140,
+        ascii=True,
+    )) :
+        jdx = np.where(edges_comids == lake_id)[0]
+        if not jdx.size:
+            log.info(f"No lake found for COMID {lake_id}")
+        else:
+            # Assumung the pour point is at the end of the COMID
+            edge_idx = jdx[-1]
+            lake_row = gdf.iloc[idx]
+            hylak_id[edge_idx] = lake_row["Hylak_id"]
+            grand_id[edge_idx] = lake_row["Grand_id"]
+            lake_area[edge_idx] = lake_row["Lake_area"]
+            vol_total[edge_idx] = lake_row["Vol_total"]
+            depth_avg[edge_idx] = lake_row["Depth_avg"]
+    
+    edges.array("hylak_id", data=hylak_id)
+    edges.array("grand_id", data=grand_id)
+    edges.array("lake_area", data=lake_area)
+    edges.array("vol_total", data=vol_total)
+    edges.array("depth_avg", data=depth_avg)
+    
+    log.info("Wrote Lake data for zones to zarr")

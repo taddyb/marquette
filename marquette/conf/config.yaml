@@ -29,9 +29,8 @@ create_streamflow:
   start_date: 01-01-1980
   end_date: 12-31-2020
 map_lake_points:
-  buffer: 250
-  hydrolakes: /projects/mhpi/data/hydroLakes/conus_hydrolakes.gpkg
-  edge_lakes: ${data_path}/zarr/lakes/edges/
+  lake_points: /projects/mhpi/data/hydroLakes/merit_intersected_data/RIV_lake_intersection_${zone}.shp
+  zarr: /projects/mhpi/data/hydroLakes/hydrolakes.zarr 
 extensions:
   - soils_data
   - pet_forcing
