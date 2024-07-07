@@ -28,6 +28,9 @@ create_streamflow:
   predictions: /projects/mhpi/yxs275/DM_output/dPL_local_daymet_new_attr_water_loss_v6v10_random_batch_all_merit_forward/
   start_date: 01-01-1980
   end_date: 12-31-2020
+map_lake_points:
+  lake_points: /projects/mhpi/data/hydroLakes/merit_intersected_data/RIV_lake_intersection_${zone}.shp
+  zarr: /projects/mhpi/data/hydroLakes/hydrolakes.zarr 
 extensions:
   - soils_data
   - pet_forcing

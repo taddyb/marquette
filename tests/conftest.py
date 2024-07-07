@@ -4,6 +4,7 @@ import hydra
 import numpy as np
 import pytest
 
+
 @pytest.fixture
 def sample_gage_cfg():
     with hydra.initialize(

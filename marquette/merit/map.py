@@ -12,12 +12,8 @@ from omegaconf import DictConfig
 from scipy.sparse import csr_matrix
 from tqdm import tqdm
 
-from marquette.merit._graph import (
-    Segment,
-    data_to_csv,
-    get_edge_counts,
-    segments_to_edges,
-)
+from marquette.merit._graph import (Segment, data_to_csv, get_edge_counts,
+                                    segments_to_edges)
 
 log = logging.getLogger(__name__)
 

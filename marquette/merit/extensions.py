@@ -224,9 +224,9 @@ def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> N
     )
 
 
-def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:   
+def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
     """Creates Q` summed data for all edges in a given MERIT zone
-    
+
     Parameters:
     ----------
     cfg: DictConfig
@@ -234,9 +234,9 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
     edges: zarr.Group
         The edges group in the MERIT zone
     """
-    n = 1 # number of splits (used for reducing memory load)
+    n = 1  # number of splits (used for reducing memory load)
     cp.cuda.runtime.setDevice(2)  # manually setting the device to 2
-    
+
     streamflow_group = Path(
         f"/projects/mhpi/data/MERIT/streamflow/zarr/{cfg.create_streamflow.version}/{cfg.zone}"
     )
@@ -245,8 +245,8 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
     streamflow_zarr: zarr.Group = zarr.open_group(streamflow_group, mode="r")
     streamflow_time = streamflow_zarr.time[:]
     # _, counts = cp.unique(edges.segment_sorting_index[:], return_counts=True)  # type: ignore
-    dim_0 : int = streamflow_zarr.time.shape[0]  # type: ignore
-    dim_1 : int = streamflow_zarr.COMID.shape[0]  # type: ignore    
+    dim_0: int = streamflow_zarr.time.shape[0]  # type: ignore
+    dim_1: int = streamflow_zarr.COMID.shape[0]  # type: ignore
     edge_ids = np.array(edges.id[:])
     edges_segment_sorting_index = cp.array(edges.segment_sorting_index[:])
     edge_index_mapping = {v: i for i, v in enumerate(edge_ids)}
@@ -254,7 +254,6 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
     q_prime_np = np.zeros([dim_0, dim_1]).transpose(1, 0)
     streamflow_data = cp.array(streamflow_zarr.streamflow[:])
 
-   
     # Generating a networkx DiGraph object
     df_path = Path(f"{cfg.create_edges.edges}").parent / f"{cfg.zone}_graph_df.csv"
     if df_path.exists():
@@ -264,47 +263,58 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
         target = []
         for idx, _ in enumerate(
             tqdm(
-                    edges.id[:],
-                    desc="creating graph in dictionary form",
-                    ascii=True,
-                    ncols=140,
-                )
-            ):
+                edges.id[:],
+                desc="creating graph in dictionary form",
+                ascii=True,
+                ncols=140,
+            )
+        ):
             if edges.ds[idx] != "0_0":
                 source.append(idx)
                 target.append(edge_index_mapping[edges.ds[idx]])
         df = pd.DataFrame({"source": source, "target": target})
         df.to_csv(df_path, index=False)
-    G = nx.from_pandas_edgelist(df=df, create_using=nx.DiGraph(),)
-    
-    time_split = np.array_split(streamflow_time, n)  #type: ignore
+    G = nx.from_pandas_edgelist(
+        df=df,
+        create_using=nx.DiGraph(),
+    )
+
+    time_split = np.array_split(streamflow_time, n)  # type: ignore
     for idx, time_range in enumerate(time_split):
         q_prime_cp = cp.zeros([time_range.shape[0], dim_1]).transpose(1, 0)
 
-        for jdx, _ in enumerate(tqdm(
-            edge_ids,
-            desc=f"calculating q` sum data for part {idx}",
-            ascii=True,
-            ncols=140,
-        )):
+        for jdx, _ in enumerate(
+            tqdm(
+                edge_ids,
+                desc=f"calculating q` sum data for part {idx}",
+                ascii=True,
+                ncols=140,
+            )
+        ):
             streamflow_ds_id = edges_segment_sorting_index[jdx]
             # num_edges_in_comid = counts[streamflow_ds_id]
             try:
                 graph = nx.descendants(G, jdx, backend="cugraph")
                 graph.add(jdx)  # Adding the idx to ensure it's counted
                 downstream_idx = np.array(list(graph))  # type: ignore
-                downstream_comid_idx = cp.unique(edges_segment_sorting_index[downstream_idx])  # type: ignore
-                q_prime_cp[downstream_comid_idx] += streamflow_data[time_range, streamflow_ds_id] # type: ignore
+                downstream_comid_idx = cp.unique(
+                    edges_segment_sorting_index[downstream_idx]
+                )  # type: ignore
+                q_prime_cp[downstream_comid_idx] += streamflow_data[
+                    time_range, streamflow_ds_id
+                ]  # type: ignore
             except nx.exception.NetworkXError:
                 # This means there is no connectivity from this basin. It's one-node graph
-                q_prime_cp[streamflow_ds_id] = streamflow_data[time_range, streamflow_ds_id]
-                
+                q_prime_cp[streamflow_ds_id] = streamflow_data[
+                    time_range, streamflow_ds_id
+                ]
+
         print("Saving GPU Memory to CPU; freeing GPU Memory")
         q_prime_np[:, time_range] = cp.asnumpy(q_prime_cp)
         del q_prime_cp
         cp.get_default_memory_pool().free_all_blocks()
-        
+
     edges.array(
         name="summed_q_prime",
         data=q_prime_np.transpose(1, 0),
-    )    
+    )
