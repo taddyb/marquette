@@ -1,6 +1,6 @@
 name: MERIT
 data_path: /projects/mhpi/data/${name}
-zone: 73
+zone: 71
 create_edges:
   buffer: 0.3334
   dx: 2000
@@ -22,10 +22,10 @@ create_TMs:
     TM: ${data_path}/zarr/TMs/sparse_MERIT_FLOWLINES_${zone}
     shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
 create_streamflow:
-  version: merit_conus_v6.14
+  version: merit_conus_v1.0
   data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}/${zone}
   obs_attributes: ${data_path}/gage_information/MERIT_basin_area_info
-  predictions: /projects/mhpi/yxs275/DM_output/dPL_local_daymet_new_attr_water_loss_v6v10_random_batch_all_merit_forward/
+  predictions: /projects/mhpi/yxs275/DM_output/water_loss_model/dPL_local_daymet_new_attr_RMSEloss_with_log_2800
   start_date: 01-01-1980
   end_date: 12-31-2020
 map_lake_points:
@@ -37,6 +37,7 @@ extensions:
   - global_dhbv_static_inputs
   - incremental_drainage_area
   - q_prime_sum
+  - q_prime_sum_stats
 # Hydra Config ------------------------------------------------------------------------#
 hydra:
   help:

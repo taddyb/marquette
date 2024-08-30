@@ -318,3 +318,35 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
         name="summed_q_prime",
         data=q_prime_np.transpose(1, 0),
     )
+    
+    
+def calculate_q_prime_sum_stats(cfg: DictConfig, edges: zarr.Group) -> None:
+    """Creates Q` summed data for all edges in a given MERIT zone
+
+    Parameters:
+    ----------
+    cfg: DictConfig
+        The configuration object.
+    edges: zarr.Group
+        The edges group in the MERIT zone
+    """
+    try:
+        summed_q_prime: np.ndarray = edges.summed_q_prime[:]
+    except AttributeError:
+        raise AttributeError("summed_q_prime data not found")
+    edges.array(
+        name="summed_q_prime_median",
+        data=np.median(summed_q_prime, axis=0),
+    )    
+    edges.array(
+        name="summed_q_prime_std",
+        data=np.std(summed_q_prime, axis=0),
+    )  
+    edges.array(
+        name="summed_q_prime_p90",
+        data=np.percentile(summed_q_prime, 90, axis=0),
+    )  
+    edges.array(
+        name="summed_q_prime_p10",
+        data=np.percentile(summed_q_prime, 10, axis=0),
+    )         

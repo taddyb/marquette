@@ -130,7 +130,7 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
     version = int(
         cfg.create_streamflow.version.lower().split("_v")[1][0]
     )  # getting the version number
-    if version >= 3:
+    if version >= 3 or version == 1:
         log.info(msg="Reading Zarr Store")
         zone_keys = [
             key for key in streamflow_predictions_root.keys() if str(cfg.zone) in key
@@ -144,7 +144,6 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
         file_runoff = np.transpose(np.concatenate(zone_runoff))
         del zone_comids
         del zone_runoff
-
     else:
         log.info("Reading Zarr Store")
         file_runoff = np.transpose(streamflow_predictions_root.Runoff)
