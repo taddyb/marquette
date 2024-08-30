@@ -36,12 +36,12 @@ def main(cfg: DictConfig) -> None:
 
         log.info(f"Mapping {cfg.zone} Streamflow to TMs")
         create_TMs(cfg, edges)
+        
+        log.info("Mapping Lake Pour Points to Edges")
+        map_lake_points(cfg, edges)
 
         log.info("Converting Streamflow to zarr")
         write_streamflow(cfg, edges)
-
-        log.info("Mapping Lake Pour Points to Edges")
-        map_lake_points(cfg, edges)
 
         log.info("Running Data Post-Processing Extensions")
         run_extensions(cfg, edges)
@@ -103,6 +103,15 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
             log.info("q_prime_sum already exists in zarr format")
         else:
             calculate_q_prime_summation(cfg, edges)
+            
+    if "q_prime_sum_stats" in cfg.extensions:
+        from marquette.merit.extensions import calculate_q_prime_sum_stats
+
+        log.info("Adding q_prime_sum statistics to your MERIT River Graph")
+        if "summed_q_prime_median" in edges:
+            log.info("q_prime_sum statistics already exists in zarr format")
+        else:
+            calculate_q_prime_sum_stats(cfg, edges)
 
 
 if __name__ == "__main__":
