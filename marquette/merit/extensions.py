@@ -402,19 +402,19 @@ def format_lstm_forcings(cfg: DictConfig, edges: zarr.Group) -> None:
     log.info("Writing outputs to zarr")
     edges.array(
         name="precip_comid",
-        data=np.median(precip_full_zone, axis=0),
+        data=precip_full_zone,
     )    
     edges.array(
         name="pet_comid",
-        data=np.std(pet_full_zone, axis=0),
+        data=pet_full_zone,
     )  
     edges.array(
         name="ndvi_comid",
-        data=np.percentile(ndvi_full_zone, 90, axis=0),
+        data=ndvi_full_zone,
     )  
     edges.array(
         name="aridity_comid",
-        data=np.percentile(aridity_full_zone, 10, axis=0),
+        data=aridity_full_zone,
     )        
     
 
