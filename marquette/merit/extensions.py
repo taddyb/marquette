@@ -350,3 +350,71 @@ def calculate_q_prime_sum_stats(cfg: DictConfig, edges: zarr.Group) -> None:
         name="summed_q_prime_p10",
         data=np.percentile(summed_q_prime, 10, axis=0),
     )         
+    
+def format_lstm_forcings(cfg: DictConfig, edges: zarr.Group) -> None:
+    forcings_store = zarr.open(Path("/projects/mhpi/data/global/zarr_sub_zone") / f"{cfg.zone}")
+
+    edge_comids = np.unique(edges.merit_basin[:])  # already sorted
+    log.info(msg="Reading Zarr Store")
+    zone_keys = [
+        key for key in forcings_store.keys() if str(cfg.zone) in key
+    ]
+    zone_comids = []
+    zone_precip = []
+    zone_pet = []
+    # zone_temp = []
+    zone_ndvi = []
+    zone_aridity = []
+    for key in zone_keys:
+        zone_comids.append(forcings_store[key].COMID[:])
+        zone_precip.append(forcings_store[key].P[:])
+        zone_pet.append(forcings_store[key].PET[:])
+        # zone_temp.append(streamflow_predictions_root[key].Temp[:])
+        zone_ndvi.append(forcings_store[key]["attrs"]["NDVI"])
+        zone_aridity.append(forcings_store[key]["attrs"]["aridity"])
+
+    streamflow_comids = np.concatenate(zone_comids).astype(int)
+    file_precip = np.transpose(np.concatenate(zone_precip))
+    file_pet = np.transpose(np.concatenate(zone_pet))
+    # file_temp = np.transpose(np.concatenate(zone_temp))
+    file_ndvi = np.concatenate(zone_ndvi)
+    file_aridity = np.concatenate(zone_aridity)
+    del zone_comids
+    del zone_precip
+    del zone_pet
+    # del zone_temp
+    del zone_ndvi
+    del zone_aridity
+    
+    log.info("Mapping to zone COMIDs")
+    precip_full_zone = np.zeros((file_precip.shape[0], edge_comids.shape[0]))
+    pet_full_zone = np.zeros((file_precip.shape[0], edge_comids.shape[0]))
+    ndvi_full_zone = np.zeros((edge_comids.shape[0]))
+    aridity_full_zone = np.zeros((edge_comids.shape[0]))
+    
+    
+    indices = np.searchsorted(edge_comids, streamflow_comids)
+    precip_full_zone[:, indices] = file_precip
+    pet_full_zone[:, indices] = file_pet
+    ndvi_full_zone[indices] = file_ndvi
+    aridity_full_zone[indices] = file_aridity
+    
+    log.info("Writing outputs to zarr")
+    edges.array(
+        name="precip_comid",
+        data=np.median(precip_full_zone, axis=0),
+    )    
+    edges.array(
+        name="pet_comid",
+        data=np.std(pet_full_zone, axis=0),
+    )  
+    edges.array(
+        name="ndvi_comid",
+        data=np.percentile(ndvi_full_zone, 90, axis=0),
+    )  
+    edges.array(
+        name="aridity_comid",
+        data=np.percentile(aridity_full_zone, 10, axis=0),
+    )        
+    
+

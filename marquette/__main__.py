@@ -112,6 +112,15 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
             log.info("q_prime_sum statistics already exists in zarr format")
         else:
             calculate_q_prime_sum_stats(cfg, edges)
+            
+    if "lstm_stats" in cfg.extensions:
+        from marquette.merit.extensions import format_lstm_forcings
+
+        log.info("Adding lstm statistics from global LSTM to your MERIT River Graph")
+        if "mean_precip" in edges:
+            log.info("q_prime_sum statistics already exists in zarr format")
+        else:
+            format_lstm_forcings(cfg, edges)
 
 
 if __name__ == "__main__":
