@@ -104,6 +104,16 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         else:
             calculate_q_prime_summation(cfg, edges)
             
+
+    if "upstream_basin_avg_mean_p" in cfg.extensions:
+        from marquette.merit.extensions import calculate_mean_p_summation
+
+        log.info("Adding q_prime_sum to your MERIT River Graph")
+        if "upstream_basin_avg_mean_p" in edges:
+            log.info("upstream_basin_avg_mean_p already exists in zarr format")
+        else:
+            calculate_mean_p_summation(cfg, edges)
+            
     if "q_prime_sum_stats" in cfg.extensions:
         from marquette.merit.extensions import calculate_q_prime_sum_stats
 
@@ -117,7 +127,7 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         from marquette.merit.extensions import format_lstm_forcings
 
         log.info("Adding lstm statistics from global LSTM to your MERIT River Graph")
-        if "mean_precip" in edges:
+        if "precip_comid" in edges:
             log.info("q_prime_sum statistics already exists in zarr format")
         else:
             format_lstm_forcings(cfg, edges)

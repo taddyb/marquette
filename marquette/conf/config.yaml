@@ -1,6 +1,6 @@
 name: MERIT
 data_path: /projects/mhpi/data/${name}
-zone: 71
+zone: 72
 create_edges:
   buffer: 0.3334
   dx: 2000
@@ -37,6 +37,7 @@ extensions:
   - global_dhbv_static_inputs
   - incremental_drainage_area
   - q_prime_sum
+  - upstream_basin_avg_mean_p
   - q_prime_sum_stats
   - lstm_stats
 # Hydra Config ------------------------------------------------------------------------#
