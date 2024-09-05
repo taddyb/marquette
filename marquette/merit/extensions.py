@@ -319,6 +319,84 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
         data=q_prime_np.transpose(1, 0),
     )
     
+def map_last_edge_to_comid(arr):
+    unique_elements = np.unique(arr)
+    mapping = {val: np.where(arr == val)[0][-1] for val in unique_elements}
+    last_indices = np.array([mapping[val] for val in unique_elements])
+
+    return unique_elements, last_indices
+    
+    
+def calculate_mean_p_summation(cfg: DictConfig, edges: zarr.Group) -> None:
+    """Creates Q` summed data for all edges in a given MERIT zone
+
+    Parameters:
+    ----------
+    cfg: DictConfig
+        The configuration object.
+    edges: zarr.Group
+        The edges group in the MERIT zone
+    """
+    cp.cuda.runtime.setDevice(6)  # manually setting the device to 2
+
+    edge_comids = edges.merit_basin[:]
+    edge_comids_cp = cp.array(edges.merit_basin[:])
+    ordered_merit_basin, indices = map_last_edge_to_comid(edge_comids)
+    ordered_merit_basin_cp = cp.array(ordered_merit_basin)
+    indices_cp = cp.array(indices)
+    mean_p_data = cp.array(edges.mean_p[:])  # type: ignore  # UNIT: mm/year
+
+    # Generating a networkx DiGraph object
+    df_path = Path(f"{cfg.create_edges.edges}").parent / f"{cfg.zone}_graph_df.csv"
+    if df_path.exists():
+        df = pd.read_csv(df_path)
+    else:
+        raise FileNotFoundError("edges graph data not found. Have you calculated summed_q_prime yet?")
+    G = nx.from_pandas_edgelist(
+        df=df,
+        create_using=nx.DiGraph(),
+    )
+    mean_p_sum = cp.zeros([indices.shape[0]])
+    idx_counts = cp.zeros([indices.shape[0]])
+
+    for j, index in enumerate(
+        tqdm(
+            indices,
+            desc="calculating mean p sum data",
+            ascii=True,
+            ncols=140,
+        )
+    ):
+        try:
+            graph = nx.descendants(G, source=index, backend="cugraph")
+            graph.add(index)  # Adding the idx to ensure it's counted
+            downstream_idx = np.array(list(graph))  # type: ignore
+            
+            unique_merit_basin = cp.unique(edge_comids_cp[downstream_idx])  # type: ignore
+            positions = cp.searchsorted(ordered_merit_basin_cp, unique_merit_basin)
+            # downstream_comid_idx = indices_cp[positions]
+            
+            mean_p_sum[positions] += mean_p_data[index]  # type: ignore
+            idx_counts[positions] += 1
+        except nx.exception.NetworkXError:
+            # This means there is no downstream connectivity from this basin. It's one-node graph            
+            mean_p_sum[j] = mean_p_data[index]
+            idx_counts[j] += 1
+
+    print("Saving GPU Memory to CPU; freeing GPU Memory")
+    upstream_basin_avg_mean_p = mean_p_sum / idx_counts
+    upstream_basin_avg_mean_p_np = cp.asnumpy(upstream_basin_avg_mean_p)
+    del upstream_basin_avg_mean_p
+    del mean_p_sum
+    del idx_counts
+    cp.get_default_memory_pool().free_all_blocks()
+
+    edges.array(
+        name="upstream_basin_avg_mean_p",
+        data=upstream_basin_avg_mean_p_np,
+    )
+    
+    
     
 def calculate_q_prime_sum_stats(cfg: DictConfig, edges: zarr.Group) -> None:
     """Creates Q` summed data for all edges in a given MERIT zone
