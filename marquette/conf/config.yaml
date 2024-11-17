@@ -1,6 +1,7 @@
 name: MERIT
 data_path: /projects/mhpi/data/${name}
-zone: 72
+zone: 74
+gpu: 6
 create_edges:
   buffer: 0.3334
   dx: 2000
@@ -15,14 +16,14 @@ create_N:
   pad_gage_id: False
   obs_dataset: ${data_path}/gage_information/obs_csvs/GRDC_point_data.csv
   obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gnn_formatted_basins.csv
-  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/gnn_zone_${zone}.csv
+  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/subzones.csv
 create_TMs:
   MERIT:
     save_sparse: True
     TM: ${data_path}/zarr/TMs/sparse_MERIT_FLOWLINES_${zone}
     shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
 create_streamflow:
-  version: merit_conus_v6.14
+  version: merit_conus_v6.18_snow
   data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}/${zone}
   obs_attributes: ${data_path}/gage_information/MERIT_basin_area_info
   predictions: /projects/mhpi/yxs275/DM_output/water_loss_model/dPL_local_daymet_new_attr_RMSEloss_with_log_2800

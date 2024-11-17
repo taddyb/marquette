@@ -140,6 +140,7 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
         for key in zone_keys:
             zone_comids.append(streamflow_predictions_root[key].COMID[:])
             zone_runoff.append(streamflow_predictions_root[key].Qr[:])
+            # zone_runoff.append(streamflow_predictions_root[key]["Q0"][:])
         streamflow_comids = np.concatenate(zone_comids).astype(int)
         file_runoff = np.transpose(np.concatenate(zone_runoff))
         del zone_comids

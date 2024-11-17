@@ -1,14 +1,15 @@
 import logging
 from pathlib import Path
 
-# import cugraph as cnx
-# import cudf
+import binsparse
 import cupy as cp
+from cupyx.scipy import sparse as cp_sparse
 import geopandas as gpd
 import networkx as nx
 import numpy as np
 import pandas as pd
 import polars as pl
+from scipy import sparse
 import zarr
 from omegaconf import DictConfig
 from tqdm import tqdm
@@ -282,7 +283,7 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
     time_split = np.array_split(streamflow_time, n)  # type: ignore
     for idx, time_range in enumerate(time_split):
         q_prime_cp = cp.zeros([time_range.shape[0], dim_1]).transpose(1, 0)
-
+        q_prime_np_edge_count_cp = cp.zeros([time_range.shape[0], dim_1]).transpose(1, 0)
         for jdx, _ in enumerate(
             tqdm(
                 edge_ids,
@@ -300,18 +301,23 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
                 downstream_comid_idx = cp.unique(
                     edges_segment_sorting_index[downstream_idx]
                 )  # type: ignore
-                q_prime_cp[downstream_comid_idx] += streamflow_data[
-                    time_range, streamflow_ds_id
-                ]  # type: ignore
-            except nx.exception.NetworkXError:
-                # This means there is no connectivity from this basin. It's one-node graph
-                q_prime_cp[streamflow_ds_id] = streamflow_data[
+                streamflow = streamflow_data[
                     time_range, streamflow_ds_id
                 ]
+                q_prime_cp[downstream_comid_idx] += streamflow
+                q_prime_np_edge_count_cp[downstream_comid_idx] += 1
+            except nx.exception.NetworkXError:
+                # This means there is no connectivity from this basin. It's one-node graph
+                streamflow = streamflow_data[
+                    time_range, streamflow_ds_id
+                ]
+                q_prime_cp[streamflow_ds_id] = streamflow
+                q_prime_np_edge_count_cp[streamflow_ds_id] += 1
 
         print("Saving GPU Memory to CPU; freeing GPU Memory")
-        q_prime_np[:, time_range] = cp.asnumpy(q_prime_cp)
+        q_prime_np[:, time_range] = cp.asnumpy(q_prime_cp / q_prime_np_edge_count_cp)
         del q_prime_cp
+        del q_prime_np_edge_count_cp
         cp.get_default_memory_pool().free_all_blocks()
 
     edges.array(
