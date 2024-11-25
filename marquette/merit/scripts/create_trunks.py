@@ -66,7 +66,7 @@ def _find_upstream_mask(full_pairs: np.ndarray, sub_pairs: np.ndarray, chunk_siz
     return final_mask
 
 
-def create_trunks(coo_path: zarr.Group, subzones: list[str]) -> cp.ndarray:
+def create_trunks(coo_path: zarr.Group, subzones: list[str], gage_id: str = "full_zone") -> cp.ndarray:
     """
     Create trunk pairs by removing subzone connections from full zone pairs.
 
@@ -76,6 +76,8 @@ def create_trunks(coo_path: zarr.Group, subzones: list[str]) -> cp.ndarray:
         Zarr group containing the coordinate pairs for full zone and subzones
     subzones : list[str]
         List of subzone names to process and remove from full zone
+    gage_id : str, optional
+        Gage ID to use for finding the larger array, by default "full_zone"
 
     Returns
     -------
@@ -90,7 +92,7 @@ def create_trunks(coo_path: zarr.Group, subzones: list[str]) -> cp.ndarray:
     3. Removes matching pairs from full zone
     4. Manages GPU memory by freeing unused arrays
     """
-    full_zone_pairs = cp.array(coo_path["full_zone"].pairs[:])
+    full_zone_pairs = cp.array(coo_path[gage_id].pairs[:])
     mempool = cp.get_default_memory_pool()
     start_time = time.perf_counter()
     for _subzone in subzones:
@@ -114,6 +116,7 @@ if __name__ == "__main__":
     2. Removes connections from specified subzones
     3. Saves the resulting filtered pairs to a new Zarr array
     """
+    cp.cuda.runtime.setDevice(1)
     zone = "74"
     coo_path = zarr.open_group(Path("/projects/mhpi/data/MERIT/zarr/gage_coo_indices") / zone)
     subzones = [
@@ -123,8 +126,9 @@ if __name__ == "__main__":
         "tennessee",
         "upper_mississippi",
     ]
-    save_name = f"zone_without_{'_'.join(subzones)}"
-    pairs = create_trunks(coo_path, subzones)
+    gage_id = '4127800'
+    save_name = f"{gage_id}_without_{'_'.join(sorted(subzones))}"
+    pairs = create_trunks(coo_path, subzones, gage_id)
     root = zarr.group(Path("/projects/mhpi/data/MERIT/zarr/gage_coo_indices") / zone / save_name)
     root.create_dataset(
         "pairs", data=cp.asnumpy(pairs), chunks=(5000, 5000), dtype="float32"

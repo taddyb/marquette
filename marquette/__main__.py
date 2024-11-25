@@ -114,14 +114,14 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         else:
             calculate_mean_p_summation(cfg, edges)
             
-    if "q_prime_sum_stats" in cfg.extensions:
-        from marquette.merit.extensions import calculate_q_prime_sum_stats
+    # if "q_prime_sum_stats" in cfg.extensions:
+    #     from marquette.merit.extensions import calculate_q_prime_sum_stats
 
-        log.info("Adding q_prime_sum statistics to your MERIT River Graph")
-        if "summed_q_prime_median" in edges:
-            log.info("q_prime_sum statistics already exists in zarr format")
-        else:
-            calculate_q_prime_sum_stats(cfg, edges)
+    #     log.info("Adding q_prime_sum statistics to your MERIT River Graph")
+    #     if "summed_q_prime_median" in edges:
+    #         log.info("q_prime_sum statistics already exists in zarr format")
+    #     else:
+    #         calculate_q_prime_sum_stats(cfg, edges)
             
     if "lstm_stats" in cfg.extensions:
         from marquette.merit.extensions import format_lstm_forcings
