@@ -1,6 +1,6 @@
 name: MERIT
 data_path: /projects/mhpi/data/${name}
-zone: 74
+zone: 71
 gpu: 6
 create_edges:
   buffer: 0.3334
@@ -41,6 +41,7 @@ extensions:
   - upstream_basin_avg_mean_p
   - q_prime_sum_stats
   - lstm_stats
+  - temp_mean
 # Hydra Config ------------------------------------------------------------------------#
 hydra:
   help:

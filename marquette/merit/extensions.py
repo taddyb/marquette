@@ -116,6 +116,48 @@ def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
     edges.array(name="pet", data=mapped_attr)
 
 
+def temp_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
+    temp_file_path = Path(f"/projects/mhpi/data/global/zarr_sub_zone/{cfg.zone}")
+    num_timesteps = pd.date_range(
+        start=cfg.create_streamflow.start_date,
+        end=cfg.create_streamflow.end_date,
+        freq="d",
+    ).shape[0]
+    if temp_file_path.exists() is False:
+        raise FileNotFoundError("Temp forcing data not found")
+    edge_merit_basins: np.ndarray = edges.merit_basin[:]
+    temp_edge_data = []
+    temp_comid_data = []
+    mapping = np.empty_like(edge_merit_basins, dtype=int)
+    files = temp_file_path.glob("*")
+    for file in files:
+        try:
+            temp_zone_data = zarr.open_group(file, mode="r")
+            comids = temp_zone_data.COMID[:]
+            temp_mean = temp_zone_data.Temp[:]
+            temp_comid_data.append(comids)
+            temp_edge_data.append(temp_mean)
+        except zarr.errors.FSPathExistNotDir:
+            log.info(f"found non group file, skipping: {file}")
+    temp_comid_arr = np.concatenate(temp_comid_data)
+    temp_arr = np.concatenate(temp_edge_data)
+
+    if temp_arr.shape[0] != len(np.unique(edge_merit_basins)):
+        raise ValueError(
+            "Temp forcing data is not consistent. Check the number of comids in the data and the edge_merit_basins array."
+        )
+    if temp_arr.shape[1] != num_timesteps:
+        raise ValueError(
+            "Temp forcing data is not consistent. Check the number of timesteps in the data and the num_timesteps variable."
+        )
+
+    for i, id in enumerate(tqdm(temp_comid_arr, desc="\rProcessing temp data")):
+        idx = np.where(edge_merit_basins == id)[0]
+        mapping[idx] = i
+    mapped_attr = temp_arr[mapping]
+    edges.array(name="temp_mean", data=mapped_attr)
+
+
 def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
     """
     Pulling Data from the global_dhbv_static_inputs data and storing it in a zarr store

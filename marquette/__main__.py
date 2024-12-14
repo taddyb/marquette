@@ -31,8 +31,8 @@ def main(cfg: DictConfig) -> None:
         log.info(f"Creating MERIT {cfg.zone} River Graph")
         edges = create_edges(cfg)
 
-        log.info(f"Creating MERIT {cfg.zone} Connectivity Matrix (N) for gages")
-        create_N(cfg, edges)
+        # log.info(f"Creating MERIT {cfg.zone} Connectivity Matrix (N) for gages")
+        # create_N(cfg, edges)
 
         log.info(f"Mapping {cfg.zone} Streamflow to TMs")
         create_TMs(cfg, edges)
@@ -76,6 +76,14 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
             log.info("PET forcing already exists in zarr format")
         else:
             pet_forcing(cfg, edges)
+    if "temp_mean" in cfg.extensions:
+        from marquette.merit.extensions import temp_forcing
+
+        log.info("Adding temp_mean forcing to your MERIT River Graph")
+        if "temp_mean" in edges:
+            log.info("Temp_mean forcing already exists in zarr format")
+        else:
+            temp_forcing(cfg, edges)
     if "global_dhbv_static_inputs" in cfg.extensions:
         from marquette.merit.extensions import global_dhbv_static_inputs
 
