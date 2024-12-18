@@ -1,5 +1,35 @@
+[project]
+name = "marquette"
+authors = [
+    {name = "Tadd Bindas", email = "taddbindas@gmail.com"},
+]
+dynamic = ["version", "dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = [
+    "icechunk==0.1.0a7",
+    "zarr==3.0.0b2",
+    "packaging==24.2",
+    "git+https://github.com/pydata/xarray",
+    "s3fs==2024.10.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest==8.3.2",
+]
+jupyter = [
+    "contextily==1.6.0",
+    "matplotlib>=3.7.0,<3.8.0",
+    "ipykernel>=6.29.0,<7.0.0",
+    "jupyterlab>=3.6.7,<4.0.0",
+    "xarray>=2024.1.1",
+    "matplotlib-inline>=0.1.6"
+]
+
 [tool.ruff]
 exclude = [
     "./tests*",
     "./scripts*",
+    "./notebooks*",
 ]
