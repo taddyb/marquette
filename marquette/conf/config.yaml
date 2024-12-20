@@ -1,38 +1,37 @@
-name: merit_s3
-s3_path: s3://mhpi-spatial/marquette/merit
-data_path: /projects/mhpi/data/MERIT
+name: MERIT
+data_path: /projects/mhpi/data/${name}
 zone: 73
-gpu: 6
+gpu: 0
 create_edges:
   buffer: 0.3334
   dx: 2000
-  edges: ${s3_path}/edges
-  flowlines: ${data_path}/raw/flowlines/riv_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
+  edges: ${data_path}/zarr/graph/edges_v1.1/
+  flowlines: ${data_path}/raw/flowlines
 create_N:
   run_whole_zone: False
   drainage_area_treshold: 0.1
   filter_based_on_dataset: True
-  gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gage_9322_intersection.shp
-  gage_coo_indices: ${s3_path}/gages/coo_pair_intersections
-  pad_gage_id: True
-  obs_dataset: ${data_path}/gage_information/obs_csvs/all_gages_info.csv
-  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/all_gages_info_combined.csv
-  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}_all.csv
+  gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gnn_dataset_v1_2.shp
+  gage_coo_indices: ${data_path}/zarr/gage_coo_indices
+  pad_gage_id: False
+  obs_dataset: ${data_path}/gage_information/obs_csvs/GRDC_point_data.csv
+  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gnn_formatted_basins.csv
+  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/subzones.csv
 create_TMs:
   MERIT:
     save_sparse: True
-    TM: ${s3_path}/TMs/sparse_MERIT_FLOWLINES_${zone}
+    TM: ${data_path}/zarr/TMs/sparse_MERIT_FLOWLINES_${zone}
     shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
 create_streamflow:
   version: merit_conus_v6.18_snow
-  data_store: ${s3_path}/streamflow/${create_streamflow.version}/${zone}
+  data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}/${zone}
   obs_attributes: ${data_path}/gage_information/MERIT_basin_area_info
   predictions: /projects/mhpi/yxs275/DM_output/water_loss_model/dPL_local_daymet_new_attr_RMSEloss_with_log_2800
   start_date: 01-01-1980
   end_date: 12-31-2020
-# map_lake_points:
-#   lake_points: /projects/mhpi/data/hydroLakes/merit_intersected_data/RIV_lake_intersection_${zone}.shp
-#   zarr: /projects/mhpi/data/hydroLakes/hydrolakes.zarr 
+map_lake_points:
+  lake_points: /projects/mhpi/data/hydroLakes/merit_intersected_data/RIV_lake_intersection_${zone}.shp
+  zarr: /projects/mhpi/data/hydroLakes/hydrolakes.zarr 
 extensions:
   - soils_data
   - pet_forcing

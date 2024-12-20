@@ -167,28 +167,26 @@ def create_edges(cfg: DictConfig) -> zarr.Group:
         edges_results_many_df = edges_results_many.compute()
         merged_df = pd.concat([edges_results_one_df, edges_results_many_df])
         for col in ["id", "ds", "up", "coords", "up_merit", "crs"]:
-            merged_df[col] = merged_df[col].astype(str)
-        xr_dataset = xr.Dataset.from_dataframe(merged_df)
-        sorted_keys_array = np.array(sorted_keys)
-        sorted_edges = xr.Dataset()
-        edges = root.create_group(group_name)
-        for var_name in xr_dataset.data_vars:
-            sorted_edges[var_name] = sort_xarray_dataarray(
-                xr_dataset[var_name],
-                sorted_keys_array,
-                xr_dataset["segment_sorting_index"].values,
-            )
-            shape = sorted_edges[var_name].shape
-            dtype = sorted_edges[var_name].dtype
-            tmp = edges.zeros(var_name, shape=shape, chunks=1000, dtype=dtype)
-            tmp[:] = sorted_edges[var_name].values
-        tmp = edges.zeros(
-            "sorted_keys",
-            shape=sorted_keys_array.shape,
-            chunks=1000,
-            dtype=sorted_keys_array.dtype,
+            merged_df[col] = merged_df[col].astype(dtype=str)
+        for col in ["merit_basin", "segment_sorting_index", "order"]:
+            merged_df[col] = merged_df[col].astype(dtype=np.int32)
+        for col in ["len", "len_dir", "slope", "sinuosity", "stream_drop", "uparea"]:
+            merged_df[col] = merged_df[col].astype(dtype=np.float32)
+
+        idx = np.argsort(merged_df["uparea"])
+        sorted_df = merged_df.iloc[idx]
+        merit_basins = sorted_df["merit_basin"]
+        
+        _edges = xr.Dataset(
+            {var: (["comid"], sorted_df[var]) for var in sorted_df.columns if var != "crs"},
+            coords={"comid": merit_basins}
         )
-        tmp[:] = sorted_keys_array
+        _edges.attrs['crs'] = sorted_df["crs"].unique()[0]
+        _edges.to_zarr(
+            store=f"{cfg.create_edges.edges}/{str(cfg.zone)}",
+            mode='w', 
+            consolidated=True
+        )
     return edges
 
 
