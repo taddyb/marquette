@@ -23,7 +23,8 @@ log = logging.getLogger(__name__)
 
 def create_edges(cfg: DictConfig) -> xr.Dataset:
     try:
-        edges = xr.open_dataset(f"{cfg.create_edges.edges}/{str(cfg.zone)}", engine="zarr")
+        root = xr.open_datatree(f"{cfg.create_edges.edges}", engine="zarr")
+        edges = root[str(cfg.zone)]
         log.info("Edge data already exists on s3")
     except FileNotFoundError:
         log.info("Edge data does not exist. Creating connections")

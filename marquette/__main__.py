@@ -24,7 +24,7 @@ def main(cfg: DictConfig) -> None:
     if cfg.name.lower() == "hydrofabric":
         raise ImportError("Hydrofabric functionality not yet supported")
     elif cfg.name.lower() == "merit_s3":
-        from marquette.merit_s3.create import (create_edges, create_N, create_TMs, write_streamflow)
+        from marquette.merit_s3.create import (create_edges, create_N)
         
         start = time.perf_counter()
         log.info(f"Creating MERIT S3 {cfg.zone} River Graph")
@@ -33,11 +33,11 @@ def main(cfg: DictConfig) -> None:
         log.info(f"Creating MERIT S3 {cfg.zone} Connectivity Matrix (N) for gages")
         create_N(cfg, edges)
 
-        log.info(f"Mapping {cfg.zone} Streamflow to S3 TMs")
-        create_TMs(cfg, edges)
+        # log.info(f"Mapping {cfg.zone} Streamflow to S3 TMs")
+        # create_TMs(cfg, edges)
 
-        log.info("Converting Streamflow to S3 DataTree")
-        write_streamflow(cfg, edges)
+        # log.info("Converting Streamflow to S3 DataTree")
+        # write_streamflow(cfg, edges)
 
         end = time.perf_counter()
         log.info(f"Extracting data took : {(end - start):.6f} seconds")
