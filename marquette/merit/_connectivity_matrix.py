@@ -11,6 +11,7 @@ import zarr
 from dask.diagnostics import ProgressBar
 from omegaconf import DictConfig
 from tqdm import tqdm
+import xarray as xr
 
 log = logging.getLogger(__name__)
 
@@ -26,12 +27,12 @@ def format_pairs(gage_output: dict):
                 for _id in up:
                     # Replace None with np.NaN for consistency
                     if _id is None:
-                        _id = np.NaN
+                        _id = np.nan
                     pairs.append((ds, _id))
             else:
                 # Handle single connection (not a list)
                 if up is None:
-                    up = np.NaN
+                    up = np.nan
                 pairs.append((ds, up))
 
     return pairs
@@ -238,11 +239,11 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
 
 def create_gage_connectivity(
     cfg: DictConfig,
-    edges: zarr.Group,
+    edges: xr.Dataset,
     gage_coo_root: zarr.Group,
     zone_csv: pd.DataFrame | gpd.GeoDataFrame,
 ) -> None:
-    def stack_traversal(gage_id: str, id_: str, idx: int, merit_flowlines: zarr.Group):
+    def stack_traversal(gage_id: str, id_: str, idx: int, edges: xr.Dataset):
         """
         Performs a stack-based traversal on a graph of river flowlines.
 
@@ -284,11 +285,11 @@ def create_gage_connectivity(
                 continue
             visited.add(current_id)
 
-            up_ids = ast.literal_eval(merit_flowlines.up[current_idx])
+            up_ids = ast.literal_eval(edges.up[current_idx].item())
             up_idx_list = []
 
             for up_id in up_ids:
-                up_idx = np.where(merit_flowlines.id[:] == up_id)[0][0]
+                up_idx = np.where(edges.id == up_id)[0][0].astype(np.int32)
                 if up_id not in visited:
                     stack.append((up_id, up_idx))
                 up_idx_list.append(up_idx)
@@ -327,7 +328,7 @@ def create_gage_connectivity(
             "pairs", data=np.array(pairs), chunks=(10000,), dtype="float32"
         )
 
-    def find_connections(row, coo_root, zone_attributes, _pad_gage_id=True):
+    def find_connections(row, coo_root, edges, _pad_gage_id=True):
         if _pad_gage_id:
             _gage_id = str(row["STAID"]).zfill(8)
         else:
@@ -336,7 +337,7 @@ def create_gage_connectivity(
         zone_edge_id = row["zone_edge_id"]
         if _gage_id not in coo_root:
             gage_output = stack_traversal(
-                _gage_id, edge_id, zone_edge_id, zone_attributes
+                _gage_id, edge_id, zone_edge_id, edges
             )
             create_coo_data(gage_output, _gage_id, coo_root)
 
@@ -345,6 +346,9 @@ def create_gage_connectivity(
 
     pad_gage_id = cfg.create_N.pad_gage_id
     dask_df = dd.from_pandas(zone_csv, npartitions=16)
+    # test_row = dask_df.head()
+    # Run the function directly to see what happens
+    # result = apply_find_connections(test_row.iloc[0], gage_coo_root, edges, pad_gage_id)
     result = dask_df.apply(
         apply_find_connections,
         args=(gage_coo_root, edges, pad_gage_id),
@@ -386,7 +390,7 @@ def new_zone_connectivity(
             river_graph["ds"].append(idx)
 
             # Decode upstream ids and convert to indices
-            upstream_ids = ast.literal_eval(edges.up[idx])
+            upstream_ids = ast.literal_eval(edges.up[idx].values)
             if len(upstream_ids) == 0:
                 river_graph["up"].append([None])
             else:
@@ -394,7 +398,7 @@ def new_zone_connectivity(
                 river_graph["up"].append(upstream_indices)
         return river_graph
 
-    mapping = {id_: i for i, id_ in enumerate(edges.id[:])}
+    mapping = {id_: i for i, id_ in enumerate(edges.id.values)}
     # bag = db.from_sequence(range(edges.id.shape[0]), npartitions=100)  # Adjust the number of partitions as needed
     # results = bag.map(lambda idx: find_connection(idx, edges, mapping))
     # with ProgressBar():

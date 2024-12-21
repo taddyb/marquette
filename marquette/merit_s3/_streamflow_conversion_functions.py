@@ -114,7 +114,7 @@ def separate_basins(cfg: DictConfig) -> None:
                 np.save(data_split_folder / f"{formatted_id}.npy", qr)
 
 
-def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
+def calculate_merit_flow(cfg: DictConfig, edges: xr.Dataset) -> None:
     attrs_df = pd.read_csv(
         Path(cfg.create_streamflow.obs_attributes) / f"COMID_{str(cfg.zone)[0]}.csv"
     )

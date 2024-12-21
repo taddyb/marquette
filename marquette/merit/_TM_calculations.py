@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 
 def create_HUC_MERIT_TM(
-    cfg: DictConfig, edges: zarr.hierarchy.Group, gdf: gpd.GeoDataFrame
+    cfg: DictConfig, edges: xr.Dataset, gdf: gpd.GeoDataFrame
 ) -> None:
     """
     Create a Transfer Matrix (TM) from GeoDataFrame.
@@ -101,8 +101,8 @@ def create_coo_data(sparse_matrix, root: zarr.Group):
 
 
 def create_sparse_MERIT_FLOW_TM(
-    cfg: DictConfig, edges: zarr.hierarchy.Group
-) -> zarr.hierarchy.Group:
+    cfg: DictConfig, edges: xr.Dataset
+) -> zarr.Group:
     """
     Creating a sparse TM that maps MERIT basins to their reaches. Flow predictions are distributed
     based on reach length/ total merit reach length
@@ -138,8 +138,8 @@ def create_sparse_MERIT_FLOW_TM(
 
 
 def create_MERIT_FLOW_TM(
-    cfg: DictConfig, edges: zarr.hierarchy.Group
-) -> zarr.hierarchy.Group:
+    cfg: DictConfig, edges: xr.Dataset
+) -> zarr.Group:
     """
     Creating a TM that maps MERIT basins to their reaches. Flow predictions are distributed
     based on reach length/ total merit reach length
@@ -158,10 +158,10 @@ def create_MERIT_FLOW_TM(
     #     COMIDs = comids[sorted_indices].astype(int)
     # else:
     log.info("Using Edge COMIDs for TM")
-    COMIDs = np.unique(edges.merit_basin[:])  # already sorted
-    river_graph_ids = edges.id[:]
-    merit_basin = edges.merit_basin[:]
-    river_graph_len = edges.len[:]
+    COMIDs = np.unique(edges.merit_basin.values)  # already sorted
+    river_graph_ids = edges.id.values
+    merit_basin = edges.merit_basin.values
+    river_graph_len = edges.len.values
 
     # indices = np.zeros((len(COMIDs), len(river_graph_ids)), dtype=np.float64)
     # for i, basin_id in tqdm(enumerate(COMIDs), total=len(COMIDs), ncols=140, ascii=True, desc="reading idx"):

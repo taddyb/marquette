@@ -5,26 +5,26 @@ gpu: 0
 create_edges:
   buffer: 0.3334
   dx: 2000
-  edges: ${data_path}/zarr/graph/edges_v1.1/
+  edges: ${data_path}/zarr_v1.1/graph/
   flowlines: ${data_path}/raw/flowlines
 create_N:
   run_whole_zone: False
   drainage_area_treshold: 0.1
   filter_based_on_dataset: True
-  gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gnn_dataset_v1_2.shp
-  gage_coo_indices: ${data_path}/zarr/gage_coo_indices
-  pad_gage_id: False
-  obs_dataset: ${data_path}/gage_information/obs_csvs/GRDC_point_data.csv
-  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gnn_formatted_basins.csv
-  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/subzones.csv
+  gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gage_9322_intersection.shp
+  gage_coo_indices: ${data_path}/zarr_v1.1/gage_coo_indices
+  pad_gage_id: True
+  obs_dataset: ${data_path}/gage_information/obs_csvs/all_gages_info.csv
+  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/all_gages_info_combined.csv
+  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}_all.csv
 create_TMs:
   MERIT:
     save_sparse: True
-    TM: ${data_path}/zarr/TMs/sparse_MERIT_FLOWLINES_${zone}
+    TM: ${data_path}/zarr_v1.1/TMs/sparse_MERIT_FLOWLINES_${zone}
     shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
 create_streamflow:
   version: merit_conus_v6.18_snow
-  data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}/${zone}
+  data_store: ${data_path}/zarr_v1.1/streamflow/${create_streamflow.version}/${zone}
   obs_attributes: ${data_path}/gage_information/MERIT_basin_area_info
   predictions: /projects/mhpi/yxs275/DM_output/water_loss_model/dPL_local_daymet_new_attr_RMSEloss_with_log_2800
   start_date: 01-01-1980
@@ -36,12 +36,12 @@ extensions:
   - soils_data
   - pet_forcing
   - global_dhbv_static_inputs
-  - incremental_drainage_area
-  - q_prime_sum
-  - upstream_basin_avg_mean_p
-  - q_prime_sum_stats
-  - lstm_stats
-  - temp_mean
+  # - incremental_drainage_area
+  # - q_prime_sum
+  # - upstream_basin_avg_mean_p
+  # - q_prime_sum_stats
+  # - lstm_stats
+  # - temp_mean
 # Hydra Config ------------------------------------------------------------------------#
 hydra:
   help:

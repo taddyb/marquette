@@ -114,13 +114,13 @@ def separate_basins(cfg: DictConfig) -> None:
                 np.save(data_split_folder / f"{formatted_id}.npy", qr)
 
 
-def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
+def calculate_merit_flow(cfg: DictConfig, edges: xr.Dataset) -> None:
     attrs_df = pd.read_csv(
         Path(cfg.create_streamflow.obs_attributes) / f"COMID_{str(cfg.zone)[0]}.csv"
     )
     id_to_area = attrs_df.set_index("COMID")["unitarea"].to_dict()
 
-    edge_comids = np.unique(edges.merit_basin[:])  # already sorted
+    edge_comids = np.unique(edges.merit_basin.values)  # already sorted
 
     streamflow_predictions_root = zarr.open(
         Path(cfg.create_streamflow.predictions), mode="r"
@@ -180,7 +180,7 @@ def calculate_merit_flow(cfg: DictConfig, edges: zarr.hierarchy.Group) -> None:
         freq="D",
     )
     data_array = xr.DataArray(
-        data=streamflow_m3_s_data,
+        data=streamflow_m3_s_data.astype(np.float32),
         dims=["time", "COMID"],  # Explicitly naming the dimensions
         coords={"time": date_range, "COMID": edge_comids},  # Adding coordinates
     )

@@ -56,8 +56,8 @@ def main(cfg: DictConfig) -> None:
         log.info(f"Mapping {cfg.zone} Streamflow to TMs")
         create_TMs(cfg, edges)
         
-        log.info("Mapping Lake Pour Points to Edges")
-        map_lake_points(cfg, edges)
+        # log.info("Mapping Lake Pour Points to Edges")
+        # map_lake_points(cfg, edges)
 
         log.info("Converting Streamflow to zarr")
         write_streamflow(cfg, edges)
