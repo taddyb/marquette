@@ -5,8 +5,6 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import xarray as xr
-import zarr
-import dask.array
 from dask.dataframe.io.io import from_pandas
 from omegaconf import DictConfig
 from tqdm import tqdm
@@ -16,42 +14,17 @@ from marquette.merit_s3._connectivity_matrix import (create_gage_connectivity,
                                                   new_zone_connectivity)
 from marquette.merit_s3._edge_calculations import (
     calculate_num_edges, create_segment,
-    many_segment_to_edge_partition, singular_segment_to_edge_partition,
-    sort_xarray_dataarray)
-from marquette.merit_s3._map_lake_points import _map_lake_points
-from marquette.merit_s3._streamflow_conversion_functions import (
-    calculate_huc10_flow_from_individual_files, calculate_merit_flow,
-    separate_basins)
-from marquette.merit_s3._TM_calculations import (  # create_sparse_MERIT_FLOW_TM,
-    create_HUC_MERIT_TM, create_MERIT_FLOW_TM, join_geospatial_data)
+    many_segment_to_edge_partition, singular_segment_to_edge_partition
+)
 
 log = logging.getLogger(__name__)
 
 
-def write_streamflow(cfg: DictConfig, edges: zarr.Group) -> None:
-    """
-    Process and write streamflow data to a Zarr store.
-    """
-    streamflow_path = Path(cfg.create_streamflow.data_store)
-    version = cfg.create_streamflow.version.lower()
-    if streamflow_path.exists() is False:
-        if version in ["dpl_v1", "dpl_v2", "dpl_v2.5", "dpl_v3-pre"]:
-            """Expecting to read from individual files"""
-            separate_basins(cfg)
-            calculate_huc10_flow_from_individual_files(cfg)
-        elif version == "dpl_v3":
-            calculate_huc10_flow_from_individual_files(cfg)
-        elif "merit" in version:
-            calculate_merit_flow(cfg, edges)
-        else:
-            raise KeyError(f"streamflow version: {version}" "not supported")
-    else:
-        log.info("Streamflow data already exists")
-
 
 def create_edges(cfg: DictConfig) -> xr.Dataset:
     try:
-        edges = xr.open_dataset(f"{cfg.create_edges.edges}/{str(cfg.zone)}", engine="zarr")
+        root = xr.open_datatree(f"{cfg.create_edges.edges}", engine="zarr")
+        edges = root[str(cfg.zone)]
         log.info("Edge data already exists on s3")
     except FileNotFoundError:
         log.info("Edge data does not exist. Creating connections")
@@ -181,29 +154,33 @@ def create_edges(cfg: DictConfig) -> xr.Dataset:
             coords={"comid": merit_basins}
         )
         edges.attrs['crs'] = sorted_df["crs"].unique()[0]
-        
-        # For faster writes, it's easier to mock the datastore using dask, and then upload the store using to_zarr()
-        # dummies = dask.array.zeros(merit_basins.shape[0], chunks=merit_basins.shape[0])
-        # xr.Dataset(data_vars={"id": ("merit_basins", dummies)}, coords={"merit_basins": merit_basins}).to_zarr(cfg.create_edges.edges, compute=False)
-        edges.to_zarr(
-            store=f"{cfg.create_edges.edges}/{str(cfg.zone)}",
+        dt = xr.DataTree(name="root")
+        dt[str(cfg.zone)] = edges
+        dt.to_zarr(
+            store=cfg.create_edges.edges,
             mode='w', 
             consolidated=True
         )
     return edges
 
 
-def create_N(cfg: DictConfig, edges: zarr.Group) -> None:
-    gage_coo_root = zarr.open_group(Path(cfg.create_N.gage_coo_indices), mode="a")
-    zone_root = gage_coo_root.require_group(cfg.zone)
-    if cfg.create_N.run_whole_zone:
-        if "full_zone" in zone_root:
-            log.info("Full zone already exists")
-        else:
-            full_zone_root = zone_root.require_group("full_zone")
-            new_zone_connectivity(cfg, edges, full_zone_root)
-        log.info("Full zone sparse Matrix created")
-    else:
+def create_N(cfg: DictConfig, edges: xr.Dataset) -> None:
+    try:
+        gage_coo_root = xr.open_datatree(cfg.create_N.gage_coo_indices, engine="zarr")
+        zone_root = gage_coo_root[cfg.zone]
+        log.info("Connectivity Matrix pulled from s3")
+        if cfg.create_N.run_whole_zone:
+            if "full_zone" not in zone_root:
+                new_zone_connectivity(cfg, edges, zone_root)   
+                log.info("Full zone sparse Matrix created")
+        
+    except FileNotFoundError:
+        gage_coo_root = xr.DataTree(name="root")
+        gage_coo_root[str(cfg.zone)] = xr.DataTree(name=str(cfg.zone))
+        zone_root = xr.DataTree(name=str(cfg.zone))
+        if cfg.create_N.run_whole_zone:
+            new_zone_connectivity(cfg, edges, zone_root)   
+            log.info("Full zone sparse Matrix created")
         zone_csv_path = Path(cfg.create_N.zone_obs_dataset)
         if zone_csv_path.exists():
             zone_csv = pd.read_csv(zone_csv_path)
@@ -212,40 +189,8 @@ def create_N(cfg: DictConfig, edges: zarr.Group) -> None:
         if zone_csv is not False:
             create_gage_connectivity(cfg, edges, zone_root, zone_csv)
             log.info("All sparse gage matrices are created")
-
-
-def create_TMs(cfg: DictConfig, edges: zarr.Group) -> None:
-    if "HUC" in cfg.create_TMs:
-        huc_to_merit_path = Path(cfg.create_TMs.HUC.TM)
-        if huc_to_merit_path.exists():
-            log.info("HUC -> MERIT data already exists in zarr format")
-        else:
-            log.info("Creating HUC10 -> MERIT TM")
-            overlayed_merit_basins = join_geospatial_data(cfg)
-            create_HUC_MERIT_TM(cfg, edges, overlayed_merit_basins)
-    merit_to_river_graph_path = Path(cfg.create_TMs.MERIT.TM)
-    if merit_to_river_graph_path.exists():
-        log.info("MERIT -> FLOWLINE data already exists in zarr format")
-    else:
-        log.info("Creating MERIT -> FLOWLINE TM")
-        # if cfg.create_TMs.MERIT.save_sparse:
-        #     create_sparse_MERIT_FLOW_TM(cfg, edges)
-        # else:
-        create_MERIT_FLOW_TM(cfg, edges)
-
-
-def map_lake_points(cfg: DictConfig, edges: zarr.Group) -> None:
-    """Maps HydroLAKES pour points to the corresponding edge
-
-    Parameters
-    ----------
-    cfg: DictConfig
-        The configuration object
-    edges: zarr.Group
-        The zarr group containing the edges
-    """
-    if "hylak_id" in edges:
-        log.info("HydroLakes Intersection already exists in Zarr format")
-    else:
-        log.info("Mapping HydroLakes Pour Points to Edges")
-        _map_lake_points(cfg, edges)
+        gage_coo_root.to_zarr(
+            store=cfg.cfg.create_N.gage_coo_indices,
+            mode='w', 
+            consolidated=True
+        )
