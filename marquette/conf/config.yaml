@@ -12,7 +12,7 @@ create_N:
   drainage_area_treshold: 0.1
   filter_based_on_dataset: True
   gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gage_9322_intersection.shp
-  gage_coo_indices: ${data_path}/zarr_v1.1/gage_coo_indices
+  gage_coo_indices: ${s3_path}/gages_coo_pair_intersections
   pad_gage_id: True
   obs_dataset: ${data_path}/gage_information/obs_csvs/all_gages_info.csv
   obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/all_gages_info_combined.csv

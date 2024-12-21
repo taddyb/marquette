@@ -11,6 +11,7 @@ import zarr
 from dask.diagnostics import ProgressBar
 from omegaconf import DictConfig
 from tqdm import tqdm
+import xarray as xr
 
 log = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ def left_pad_number(number):
     return number_str
 
 
-def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
+def map_gages_to_zone(cfg: DictConfig, edges: xr.DataTree) -> gpd.GeoDataFrame:
     def choose_row_to_keep(group_df: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         """
         Selects the row where 'uparea' is closest to 'DRAIN_SQKM' without going below it.
@@ -238,8 +239,8 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
 
 def create_gage_connectivity(
     cfg: DictConfig,
-    edges: zarr.Group,
-    gage_coo_root: zarr.Group,
+    edges: xr.Dataset,
+    gage_coo_root: xr.DataTree,
     zone_csv: pd.DataFrame | gpd.GeoDataFrame,
 ) -> None:
     def stack_traversal(gage_id: str, id_: str, idx: int, merit_flowlines: zarr.Group):
@@ -302,7 +303,7 @@ def create_gage_connectivity(
         return river_graph
 
     def create_coo_data(
-        gage_output, _gage_id: str, root: zarr.Group
+        gage_output, _gage_id: str, root: xr.DataTree
     ) -> List[Tuple[Any, Any]]:
         """
         Creates coordinate format (COO) data from river graph output for a specific gage.
@@ -321,11 +322,15 @@ def create_gage_connectivity(
         """
         pairs = format_pairs(gage_output)
 
-        # Create a Zarr dataset for this specific gage
-        single_gage_csr_data = root.require_group(_gage_id)
-        single_gage_csr_data.create_dataset(
-            "pairs", data=np.array(pairs), chunks=(10000,), dtype="float32"
-        )
+        da = xr.DataArray(
+            data=pairs_array,
+            dims=["pair_idx", "connection"],
+            coords={
+                "pair_idx": np.arange(len(pairs)),
+                "connection": ["downstream", "upstream"]
+            },
+        ).chunk({"pair_idx": 10000})
+        root[_gage_id] = da
 
     def find_connections(row, coo_root, zone_attributes, _pad_gage_id=True):
         if _pad_gage_id:
@@ -357,10 +362,10 @@ def create_gage_connectivity(
 
 def new_zone_connectivity(
     cfg: DictConfig,
-    edges: zarr.Group,
-    full_zone_root: zarr.Group,
+    edges: xr.Dataset,
+    full_zone_root: xr.DataTree,
 ) -> None:
-    def find_connection(edges: zarr.Group, mapping: dict) -> dict:
+    def find_connection(edges: xr.Dataset, mapping: dict) -> dict:
         """
         Performs a traversal on a graph of river flowlines, represented by a NumPy array of edges.
         This function iterates over each edge and explores its upstream connections, constructing a graph structure.
@@ -407,7 +412,14 @@ def new_zone_connectivity(
     #     combined_graph["up"].extend(graph["up"])
 
     pairs = format_pairs(river_graph)
-
-    full_zone_root.create_dataset(
-        "pairs", data=np.array(pairs), chunks=(5000, 5000), dtype="float32"
-    )
+    # pairs = xr.DataArray(
+    #     data=np.array(pairs, dtype=np.float32),
+    #     dims=,
+    #     coords=,
+    #     chunks=(5000, 5000)
+    # )
+    # edges = xr.Dataset(
+    #     {var: (["comid"], sorted_df[var]) for var in sorted_df.columns if var != "crs"},
+    #     coords={"comid": merit_basins}
+    # )
+    # full_zone_root[]
