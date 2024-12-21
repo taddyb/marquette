@@ -50,10 +50,13 @@ def write_streamflow(cfg: DictConfig, edges: xr.Dataset) -> None:
 
 def create_edges(cfg: DictConfig) -> xr.Dataset:
     try:
-        root = xr.open_datatree(f"{cfg.create_edges.edges}", engine="zarr")
-        edges = root[str(cfg.zone)]
-        log.info("Edge data already exists")
+        dt = xr.open_datatree(filename_or_obj=f"{cfg.create_edges.edges}", engine="zarr")
     except FileNotFoundError:
+        dt = xr.DataTree(name="root")
+    try:
+        edges = dt[str(cfg.zone)]
+        log.info("Edge data already exists")
+    except KeyError:
         flowline_file = find_flowlines(cfg)
         polyline_gdf = gpd.read_file(flowline_file)
         dx = cfg.create_edges.dx  # Unit: Meters
@@ -181,11 +184,11 @@ def create_edges(cfg: DictConfig) -> xr.Dataset:
             coords={"comid": merit_basins}
         )
         edges.attrs['crs'] = sorted_df["crs"].unique()[0]
-        dt = xr.DataTree(name="root")
+        
         dt[str(cfg.zone)] = edges
         dt.to_zarr(
             store=cfg.create_edges.edges,
-            mode='w', 
+            mode='a', 
             consolidated=True
         )
     return edges

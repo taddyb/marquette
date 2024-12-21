@@ -2,7 +2,6 @@ import logging
 import time
 
 import hydra
-import zarr
 from omegaconf import DictConfig
 
 log = logging.getLogger(name=__name__)
