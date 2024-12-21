@@ -27,7 +27,7 @@ from marquette.merit._TM_calculations import (  # create_sparse_MERIT_FLOW_TM,
 log = logging.getLogger(__name__)
 
 
-def write_streamflow(cfg: DictConfig, edges: zarr.Group) -> None:
+def write_streamflow(cfg: DictConfig, edges: xr.Dataset) -> None:
     """
     Process and write streamflow data to a Zarr store.
     """
@@ -48,13 +48,15 @@ def write_streamflow(cfg: DictConfig, edges: zarr.Group) -> None:
         log.info("Streamflow data already exists")
 
 
-def create_edges(cfg: DictConfig) -> zarr.Group:
-    root = zarr.open_group(Path(cfg.create_edges.edges), mode="a")
-    group_name = f"{cfg.zone}"
-    if group_name in root:
-        log.info("Edge data already exists in zarr format")
-        edges = root.require_group(group_name)
-    else:
+def create_edges(cfg: DictConfig) -> xr.Dataset:
+    try:
+        dt = xr.open_datatree(filename_or_obj=f"{cfg.create_edges.edges}", engine="zarr")
+    except FileNotFoundError:
+        dt = xr.DataTree(name="root")
+    try:
+        edges = dt[str(cfg.zone)]
+        log.info("Edge data already exists")
+    except KeyError:
         flowline_file = find_flowlines(cfg)
         polyline_gdf = gpd.read_file(flowline_file)
         dx = cfg.create_edges.dx  # Unit: Meters
@@ -167,32 +169,32 @@ def create_edges(cfg: DictConfig) -> zarr.Group:
         edges_results_many_df = edges_results_many.compute()
         merged_df = pd.concat([edges_results_one_df, edges_results_many_df])
         for col in ["id", "ds", "up", "coords", "up_merit", "crs"]:
-            merged_df[col] = merged_df[col].astype(str)
-        xr_dataset = xr.Dataset.from_dataframe(merged_df)
-        sorted_keys_array = np.array(sorted_keys)
-        sorted_edges = xr.Dataset()
-        edges = root.create_group(group_name)
-        for var_name in xr_dataset.data_vars:
-            sorted_edges[var_name] = sort_xarray_dataarray(
-                xr_dataset[var_name],
-                sorted_keys_array,
-                xr_dataset["segment_sorting_index"].values,
-            )
-            shape = sorted_edges[var_name].shape
-            dtype = sorted_edges[var_name].dtype
-            tmp = edges.zeros(var_name, shape=shape, chunks=1000, dtype=dtype)
-            tmp[:] = sorted_edges[var_name].values
-        tmp = edges.zeros(
-            "sorted_keys",
-            shape=sorted_keys_array.shape,
-            chunks=1000,
-            dtype=sorted_keys_array.dtype,
+            merged_df[col] = merged_df[col].astype(dtype=str)
+        for col in ["merit_basin", "segment_sorting_index", "order"]:
+            merged_df[col] = merged_df[col].astype(dtype=np.int32)
+        for col in ["len", "len_dir", "slope", "sinuosity", "stream_drop", "uparea"]:
+            merged_df[col] = merged_df[col].astype(dtype=np.float32)
+
+        idx = np.argsort(merged_df["uparea"])
+        sorted_df = merged_df.iloc[idx]
+        merit_basins = sorted_df["merit_basin"]
+        
+        edges: xr.Dataset = xr.Dataset(
+            {var: (["comid"], sorted_df[var]) for var in sorted_df.columns if var != "crs"},
+            coords={"comid": merit_basins}
         )
-        tmp[:] = sorted_keys_array
+        edges.attrs['crs'] = sorted_df["crs"].unique()[0]
+        
+        dt[str(cfg.zone)] = edges
+        dt.to_zarr(
+            store=cfg.create_edges.edges,
+            mode='a', 
+            consolidated=True
+        )
     return edges
 
 
-def create_N(cfg: DictConfig, edges: zarr.Group) -> None:
+def create_N(cfg: DictConfig, edges: xr.Dataset) -> None:
     gage_coo_root = zarr.open_group(Path(cfg.create_N.gage_coo_indices), mode="a")
     zone_root = gage_coo_root.require_group(cfg.zone)
     if cfg.create_N.run_whole_zone:
@@ -213,7 +215,7 @@ def create_N(cfg: DictConfig, edges: zarr.Group) -> None:
             log.info("All sparse gage matrices are created")
 
 
-def create_TMs(cfg: DictConfig, edges: zarr.Group) -> None:
+def create_TMs(cfg: DictConfig, edges: xr.Dataset) -> None:
     if "HUC" in cfg.create_TMs:
         huc_to_merit_path = Path(cfg.create_TMs.HUC.TM)
         if huc_to_merit_path.exists():
@@ -233,14 +235,14 @@ def create_TMs(cfg: DictConfig, edges: zarr.Group) -> None:
         create_MERIT_FLOW_TM(cfg, edges)
 
 
-def map_lake_points(cfg: DictConfig, edges: zarr.Group) -> None:
+def map_lake_points(cfg: DictConfig, edges: xr.Dataset) -> None:
     """Maps HydroLAKES pour points to the corresponding edge
 
     Parameters
     ----------
     cfg: DictConfig
         The configuration object
-    edges: zarr.Group
+    edges: xr.Dataset
         The zarr group containing the edges
     """
     if "hylak_id" in edges:
@@ -250,7 +252,7 @@ def map_lake_points(cfg: DictConfig, edges: zarr.Group) -> None:
         _map_lake_points(cfg, edges)
         
 
-def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
+def run_extensions(cfg: DictConfig, edges: xr.Dataset) -> None:
     """
     The function for running post-processing data extensions
 
@@ -258,6 +260,8 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
     :type cfg: DictConfig
     :return: None
     """
+    edges = edges.compute()
+    dt = xr.open_datatree(cfg.create_edges.edges, engine="zarr").compute()
     if "soils_data" in cfg.extensions:
         from marquette.merit.extensions import soils_data
 
@@ -265,7 +269,7 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         if "ksat" in edges:
             log.info("soils information already exists in zarr format")
         else:
-            soils_data(cfg, edges)
+            soils_data(cfg, edges, dt)
     if "pet_forcing" in cfg.extensions:
         from marquette.merit.extensions import pet_forcing
 
@@ -273,7 +277,7 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         if "pet" in edges:
             log.info("PET forcing already exists in zarr format")
         else:
-            pet_forcing(cfg, edges)
+            pet_forcing(cfg, edges, dt)
     if "temp_mean" in cfg.extensions:
         from marquette.merit.extensions import temp_forcing
 
@@ -281,7 +285,7 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         if "temp_mean" in edges:
             log.info("Temp_mean forcing already exists in zarr format")
         else:
-            temp_forcing(cfg, edges)
+            temp_forcing(cfg, edges, dt)
     if "global_dhbv_static_inputs" in cfg.extensions:
         from marquette.merit.extensions import global_dhbv_static_inputs
 
@@ -289,7 +293,7 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         if "aridity" in edges:
             log.info("global_dhbv_static_inputs already exists in zarr format")
         else:
-            global_dhbv_static_inputs(cfg, edges)
+            global_dhbv_static_inputs(cfg, edges, dt)
 
     if "incremental_drainage_area" in cfg.extensions:
         from marquette.merit.extensions import \
@@ -299,7 +303,7 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         if "incremental_drainage_area" in edges:
             log.info("incremental_drainage_area already exists in zarr format")
         else:
-            calculate_incremental_drainage_area(cfg, edges)
+            calculate_incremental_drainage_area(cfg, edges, dt)
 
     if "q_prime_sum" in cfg.extensions:
         from marquette.merit.extensions import calculate_q_prime_summation
@@ -308,7 +312,16 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         if "summed_q_prime" in edges:
             log.info("q_prime_sum already exists in zarr format")
         else:
-            calculate_q_prime_summation(cfg, edges)
+            calculate_q_prime_summation(cfg, edges, dt)
+            
+    if "log_uparea" in cfg.extensions:
+        from marquette.merit.extensions import log_uparea
+
+        log.info("Adding log_uparea to your MERIT River Graph")
+        if "log_uparea" in edges:
+            log.info("log_uparea already exists in zarr format")
+        else:
+            log_uparea(cfg, edges, dt)
             
 
     if "upstream_basin_avg_mean_p" in cfg.extensions:
@@ -318,7 +331,7 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         if "upstream_basin_avg_mean_p" in edges:
             log.info("upstream_basin_avg_mean_p already exists in zarr format")
         else:
-            calculate_mean_p_summation(cfg, edges)
+            calculate_mean_p_summation(cfg, edges, dt)
             
     # if "q_prime_sum_stats" in cfg.extensions:
     #     from marquette.merit.extensions import calculate_q_prime_sum_stats
@@ -336,4 +349,4 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         if "precip_comid" in edges:
             log.info("q_prime_sum statistics already exists in zarr format")
         else:
-            format_lstm_forcings(cfg, edges)
+            format_lstm_forcings(cfg, edges, dt)
