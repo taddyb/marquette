@@ -87,6 +87,20 @@ def soils_data(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
         mode='a', 
         consolidated=True,
     )
+    
+def log_uparea(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
+    var = xr.DataArray(
+        data=np.log10(edges.uparea.values),
+        coords={"comid": edges.merit_basin.values},
+        name="log_areas"
+    )
+    edges["log_areas"] = var
+    dt[str(cfg.zone)] = edges
+    dt.to_zarr(
+        store=cfg.create_edges.edges,
+        mode='a', 
+        consolidated=True,
+    )
 
 
 def pet_forcing(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:

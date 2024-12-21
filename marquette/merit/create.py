@@ -261,7 +261,7 @@ def run_extensions(cfg: DictConfig, edges: xr.Dataset) -> None:
     :return: None
     """
     edges = edges.compute()
-    dt = xr.open_datatree(cfg.create_edges.edges, engine="zarr")
+    dt = xr.open_datatree(cfg.create_edges.edges, engine="zarr").compute()
     if "soils_data" in cfg.extensions:
         from marquette.merit.extensions import soils_data
 
@@ -313,6 +313,15 @@ def run_extensions(cfg: DictConfig, edges: xr.Dataset) -> None:
             log.info("q_prime_sum already exists in zarr format")
         else:
             calculate_q_prime_summation(cfg, edges, dt)
+            
+    if "log_uparea" in cfg.extensions:
+        from marquette.merit.extensions import log_uparea
+
+        log.info("Adding log_uparea to your MERIT River Graph")
+        if "log_uparea" in edges:
+            log.info("log_uparea already exists in zarr format")
+        else:
+            log_uparea(cfg, edges, dt)
             
 
     if "upstream_basin_avg_mean_p" in cfg.extensions:

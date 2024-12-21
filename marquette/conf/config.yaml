@@ -1,6 +1,6 @@
 name: MERIT
 data_path: /projects/mhpi/data/${name}
-zone: 72
+zone: 73
 gpu: 0
 create_edges:
   buffer: 0.3334
@@ -36,6 +36,7 @@ extensions:
   - soils_data
   - pet_forcing
   - global_dhbv_static_inputs
+  - log_uparea
   # - incremental_drainage_area
   # - q_prime_sum
   # - upstream_basin_avg_mean_p
