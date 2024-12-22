@@ -174,23 +174,30 @@ def create_edges(cfg: DictConfig) -> xr.Dataset:
             merged_df[col] = merged_df[col].astype(dtype=np.int32)
         for col in ["len", "len_dir", "slope", "sinuosity", "stream_drop", "uparea"]:
             merged_df[col] = merged_df[col].astype(dtype=np.float32)
-
-        idx = np.argsort(merged_df["uparea"])
-        sorted_df = merged_df.iloc[idx]
-        merit_basins = sorted_df["merit_basin"]
-        sorted_keys_array = np.array(sorted_keys)
         
         edges: xr.Dataset = xr.Dataset()
         edges.attrs['crs'] = merged_df["crs"].unique()[0]
+        merit_basins = sort_xarray_dataarray(
+            merged_df["merit_basin"].values,
+            np.array(sorted_keys),
+            merged_df["segment_sorting_index"].values,
+        )
+        edges["comid"] = xr.DataArray(
+            data=merit_basins,
+            coords={"comid": merit_basins},
+        )
+        
         for var_name in merged_df.columns:
-            if var_name != "crs":
+            if var_name not in ["crs", "merit_basin", "coords"]:
                 sorted_data = sort_xarray_dataarray(
-                    merged_df[var_name].value_counts(),
-                    sorted_keys_array,
+                    merged_df[var_name].values,
+                    np.array(sorted_keys),
                     merged_df["segment_sorting_index"].values,
-                    merit_basins
                 )
-                edges[var_name] = sorted_data
+                edges[var_name] = xr.DataArray(
+                    data=sorted_data,
+                    coords={"comid": merit_basins},
+                )
         
         dt[str(cfg.zone)] = edges
         dt.to_zarr(
