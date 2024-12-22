@@ -178,12 +178,19 @@ def create_edges(cfg: DictConfig) -> xr.Dataset:
         idx = np.argsort(merged_df["uparea"])
         sorted_df = merged_df.iloc[idx]
         merit_basins = sorted_df["merit_basin"]
+        sorted_keys_array = np.array(sorted_keys)
         
-        edges: xr.Dataset = xr.Dataset(
-            {var: (["comid"], sorted_df[var]) for var in sorted_df.columns if var != "crs"},
-            coords={"comid": merit_basins}
-        )
-        edges.attrs['crs'] = sorted_df["crs"].unique()[0]
+        edges: xr.Dataset = xr.Dataset()
+        edges.attrs['crs'] = merged_df["crs"].unique()[0]
+        for var_name in merged_df.columns:
+            if var_name != "crs":
+                sorted_data = sort_xarray_dataarray(
+                    merged_df[var_name].value_counts(),
+                    sorted_keys_array,
+                    merged_df["segment_sorting_index"].values,
+                    merit_basins
+                )
+                edges[var_name] = sorted_data
         
         dt[str(cfg.zone)] = edges
         dt.to_zarr(

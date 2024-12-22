@@ -480,6 +480,10 @@ def sort_based_on_keys(array_to_sort, keys, segment_sorted_index):
     return np.array(sorted_array)
 
 
-def sort_xarray_dataarray(da, keys, segment_sorted_index):
-    sorted_data = sort_based_on_keys(da.values, keys, segment_sorted_index)
-    return xr.DataArray(sorted_data, dims=da.dims, coords=da.coords)
+def sort_xarray_dataarray(da, keys, segment_sorted_index, merit_basins):
+    sorted_data = sort_based_on_keys(da, keys, segment_sorted_index)
+    data = xr.DataArray(
+        data=sorted_data,
+        coords={"comid": merit_basins},
+    )
+    return data
