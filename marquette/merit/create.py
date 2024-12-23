@@ -182,9 +182,9 @@ def create_edges(cfg: DictConfig) -> xr.Dataset:
             np.array(sorted_keys),
             merged_df["segment_sorting_index"].values,
         )
-        edges["comid"] = xr.DataArray(
+        edges["merit_basin"] = xr.DataArray(
             data=merit_basins,
-            coords={"comid": merit_basins},
+            coords={"merit_basin": merit_basins},
         )
         
         for var_name in merged_df.columns:
@@ -196,7 +196,7 @@ def create_edges(cfg: DictConfig) -> xr.Dataset:
                 )
                 edges[var_name] = xr.DataArray(
                     data=sorted_data,
-                    coords={"comid": merit_basins},
+                    coords={"merit_basin": merit_basins},
                 )
         
         dt[str(cfg.zone)] = edges

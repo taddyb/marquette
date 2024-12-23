@@ -69,7 +69,7 @@ def soils_data(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
     graph_cols = ["COMID", "up1", "NextDownID"]
     df_cols = graph_cols + attributes
     _df = df_filled.select(pl.col(df_cols))
-    merit_basins = edges.comid.values
+    merit_basins = edges.merit_basin.values
     edges_df = pl.DataFrame({"COMID": merit_basins})
     joined_df = edges_df.join(_df, on="COMID", how="left", join_nulls=True)
     
@@ -91,7 +91,7 @@ def soils_data(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
 def log_uparea(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
     var = xr.DataArray(
         data=np.log10(edges.uparea.values),
-        coords={"comid": edges.comid.values},
+        coords={"comid": edges.merit_basin.values},
         name="log_areas"
     )
     edges["log_areas"] = var
@@ -113,7 +113,7 @@ def pet_forcing(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
     num_timesteps = timesteps.shape[0]
     if pet_file_path.exists() is False:
         raise FileNotFoundError("PET forcing data not found")
-    edge_merit_basins: np.ndarray = edges.comid.values
+    edge_merit_basins: np.ndarray = edges.merit_basin.values
     pet_edge_data = []
     pet_comid_data = []
     mapping = np.empty_like(edge_merit_basins, dtype=int)
@@ -167,7 +167,7 @@ def temp_forcing(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
     num_timesteps = timesteps.shape[0]
     if temp_file_path.exists() is False:
         raise FileNotFoundError("Temp forcing data not found")
-    edge_merit_basins: np.ndarray = edges.comid.values
+    edge_merit_basins: np.ndarray = edges.merit_basin.values
     temp_edge_data = []
     temp_comid_data = []
     mapping = np.empty_like(edge_merit_basins, dtype=int)
@@ -226,7 +226,7 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTre
     file_path = Path(f"/projects/mhpi/data/global/zarr_sub_zone/{cfg.zone}")
     if file_path.exists() is False:
         raise FileNotFoundError("global_dhbv_static_inputs data not found")
-    edge_merit_basins: np.ndarray = edges.comid.values
+    edge_merit_basins: np.ndarray = edges.merit_basin.values
     comid_data = []
     aridity_data = []
     porosity_data = []
@@ -345,7 +345,7 @@ def calculate_incremental_drainage_area(cfg: DictConfig, edges: xr.Dataset, dt: 
     df = df.with_columns(pl.col("COMID").cast(dtype=pl.Int32))  # convert COMID to Int32
     edges_df = pl.DataFrame(
         {
-            "COMID": edges.comid.values,
+            "COMID": edges.merit_basin.values,
             "id": edges.id.values,
             "order": np.arange(edges.id.shape[0]),
         }
@@ -377,7 +377,7 @@ def calculate_incremental_drainage_area(cfg: DictConfig, edges: xr.Dataset, dt: 
     )
     var = xr.DataArray(
         data=result.select(pl.col("incremental_drainage_area")).to_numpy().squeeze().astype(np.float32),
-        coords={"comid": edges.comid.values},
+        coords={"comid": edges.merit_basin.values},
         name="incremental_drainage_area"
     )
     edges["incremental_drainage_area"] = var
@@ -509,8 +509,8 @@ def calculate_mean_p_summation(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTr
     """
     cp.cuda.runtime.setDevice(6)  # manually setting the device to 2
 
-    edge_comids = edges.comid.values
-    edge_comids_cp = cp.array(edges.comid.values)
+    edge_comids = edges.merit_basin.values
+    edge_comids_cp = cp.array(edges.merit_basin.values)
     ordered_merit_basin, indices = map_last_edge_to_comid(edge_comids)
     ordered_merit_basin_cp = cp.array(ordered_merit_basin)
     indices_cp = cp.array(indices)
