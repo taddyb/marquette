@@ -13,12 +13,11 @@ from scipy import sparse
 import zarr
 from omegaconf import DictConfig
 from tqdm import tqdm
-import xarray as xr
 
 log = logging.getLogger(__name__)
 
 
-def soils_data(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
+def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
     flowline_file = (
         Path(cfg.data_path)
         / f"raw/routing_soil_properties/riv_pfaf_{cfg.zone}_buff_split_soil_properties.shp"
@@ -26,7 +25,7 @@ def soils_data(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
     polyline_gdf = gpd.read_file(flowline_file)
     gdf = pd.DataFrame(polyline_gdf.drop(columns="geometry"))
     df = pl.from_pandas(gdf)
-    df = df.with_columns(pl.col("COMID").cast(dtype=pl.Int32))  # convert COMID to Int32
+    df = df.with_columns(pl.col("COMID").cast(pl.Int64))  # convert COMID to int64
     attributes = [
         "Ks_05_M_25",
         "N_05_M_250",
@@ -69,57 +68,31 @@ def soils_data(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
     graph_cols = ["COMID", "up1", "NextDownID"]
     df_cols = graph_cols + attributes
     _df = df_filled.select(pl.col(df_cols))
-    merit_basins = edges.merit_basin.values
-    edges_df = pl.DataFrame({"COMID": merit_basins})
+    edges_df = pl.DataFrame({"COMID": edges.merit_basin[:]})
     joined_df = edges_df.join(_df, on="COMID", how="left", join_nulls=True)
-    
     for i in range(len(names)):
-        data = joined_df.select(pl.col(attributes[i])).to_numpy().squeeze().astype(np.float32)
-        var = xr.DataArray(
-            data=data,
-            coords={"comid": merit_basins},
-            name=names[i]
+        edges.array(
+            name=names[i],
+            data=joined_df.select(pl.col(attributes[i])).to_numpy().squeeze(),
         )
-        edges[names[i]] = var
-    dt[str(cfg.zone)] = edges
-    dt.to_zarr(
-        store=cfg.create_edges.edges,
-        mode='a', 
-        consolidated=True,
-    )
-    
-def log_uparea(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
-    var = xr.DataArray(
-        data=np.log10(edges.uparea.values),
-        coords={"comid": edges.merit_basin.values},
-        name="log_areas"
-    )
-    edges["log_areas"] = var
-    dt[str(cfg.zone)] = edges
-    dt.to_zarr(
-        store=cfg.create_edges.edges,
-        mode='a', 
-        consolidated=True,
-    )
 
 
-def pet_forcing(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
+def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
     pet_file_path = Path(f"/projects/mhpi/data/global/zarr_sub_zone/{cfg.zone}")
-    timesteps = pd.date_range(
+    num_timesteps = pd.date_range(
         start=cfg.create_streamflow.start_date,
         end=cfg.create_streamflow.end_date,
         freq="d",
-    )
-    num_timesteps = timesteps.shape[0]
+    ).shape[0]
     if pet_file_path.exists() is False:
         raise FileNotFoundError("PET forcing data not found")
-    edge_merit_basins: np.ndarray = edges.merit_basin.values
+    edge_merit_basins: np.ndarray = edges.merit_basin[:]
     pet_edge_data = []
     pet_comid_data = []
     mapping = np.empty_like(edge_merit_basins, dtype=int)
-    pet_data = zarr.open_group(pet_file_path, mode="r")
-    for key in pet_data.keys():
-        pet_zone_data =pet_data[key]
+    files = pet_file_path.glob("*")
+    for file in files:
+        pet_zone_data = zarr.open_group(file, mode="r")
         comids = pet_zone_data.COMID[:]
         pet = pet_zone_data.PET[:]
         pet_comid_data.append(comids)
@@ -140,44 +113,32 @@ def pet_forcing(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
         idx = np.where(edge_merit_basins == id)[0]
         mapping[idx] = i
     mapped_attr = pet_arr[mapping]
-    var = xr.DataArray(
-        data=mapped_attr.astype(np.float32),
-        coords={
-            "comid": edge_merit_basins,
-            "time": timesteps,
-        },
-        name="pet"
-    )
-    edges["pet"] = var
-    dt[str(cfg.zone)] = edges
-    dt.to_zarr(
-        store=cfg.create_edges.edges,
-        mode='a', 
-        consolidated=True
-    )
+    edges.array(name="pet", data=mapped_attr)
 
 
-def temp_forcing(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
+def temp_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
     temp_file_path = Path(f"/projects/mhpi/data/global/zarr_sub_zone/{cfg.zone}")
-    timesteps = pd.date_range(
+    num_timesteps = pd.date_range(
         start=cfg.create_streamflow.start_date,
         end=cfg.create_streamflow.end_date,
         freq="d",
-    )
-    num_timesteps = timesteps.shape[0]
+    ).shape[0]
     if temp_file_path.exists() is False:
         raise FileNotFoundError("Temp forcing data not found")
-    edge_merit_basins: np.ndarray = edges.merit_basin.values
+    edge_merit_basins: np.ndarray = edges.merit_basin[:]
     temp_edge_data = []
     temp_comid_data = []
     mapping = np.empty_like(edge_merit_basins, dtype=int)
-    temp_data = zarr.open_group(temp_file_path, mode="r")
-    for key in temp_data.keys():
-        temp_zone_data =temp_data[key]
-        comids = temp_zone_data.COMID[:]
-        temp_mean = temp_zone_data.Temp[:]
-        temp_comid_data.append(comids)
-        temp_edge_data.append(temp_mean)
+    files = temp_file_path.glob("*")
+    for file in files:
+        try:
+            temp_zone_data = zarr.open_group(file, mode="r")
+            comids = temp_zone_data.COMID[:]
+            temp_mean = temp_zone_data.Temp[:]
+            temp_comid_data.append(comids)
+            temp_edge_data.append(temp_mean)
+        except zarr.errors.FSPathExistNotDir:
+            log.info(f"found non group file, skipping: {file}")
     temp_comid_arr = np.concatenate(temp_comid_data)
     temp_arr = np.concatenate(temp_edge_data)
 
@@ -194,24 +155,10 @@ def temp_forcing(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
         idx = np.where(edge_merit_basins == id)[0]
         mapping[idx] = i
     mapped_attr = temp_arr[mapping]
-    var = xr.DataArray(
-        data=mapped_attr.astype(np.float32),
-        coords={
-            "comid": edge_merit_basins,
-            "time": timesteps,
-        },
-        name="temp_mean"
-    )
-    edges["temp_mean"] = var
-    dt[str(cfg.zone)] = edges
-    dt.to_zarr(
-        store=cfg.create_edges.edges,
-        mode='a', 
-        consolidated=True
-    )
+    edges.array(name="temp_mean", data=mapped_attr)
 
 
-def global_dhbv_static_inputs(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
+def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
     """
     Pulling Data from the global_dhbv_static_inputs data and storing it in a zarr store
     All attrs are as follows:
@@ -226,7 +173,7 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTre
     file_path = Path(f"/projects/mhpi/data/global/zarr_sub_zone/{cfg.zone}")
     if file_path.exists() is False:
         raise FileNotFoundError("global_dhbv_static_inputs data not found")
-    edge_merit_basins: np.ndarray = edges.merit_basin.values
+    edge_merit_basins: np.ndarray = edges.merit_basin[:]
     comid_data = []
     aridity_data = []
     porosity_data = []
@@ -283,53 +230,19 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTre
     for i, id in enumerate(tqdm(comid_arr, desc="\rProcessing data")):
         idx = np.where(edge_merit_basins == id)[0]
         mapping[idx] = i
-        
-        aridity = pet_zone_data["attrs"]["aridity"][:]
-        porosity = pet_zone_data["attrs"]["Porosity"][:]
-        mean_p = pet_zone_data["attrs"]["meanP"][:]
-        mean_elevation = pet_zone_data["attrs"]["meanelevation"][:]
-        glaciers = pet_zone_data["attrs"]["glaciers"][:]
-        ndvi = pet_zone_data["attrs"]["NDVI"][:]
-        meanTa = pet_zone_data["attrs"]["meanTa"][:]
-        seasonality_P = pet_zone_data["attrs"]["seasonality_P"][:]
-        permeability = pet_zone_data["attrs"]["permeability"][:]
+    edges.array(name="aridity", data=aridity_arr[mapping])
+    edges.array(name="porosity", data=porosity_arr[mapping])
+    edges.array(name="mean_p", data=mean_p_arr[mapping])
+    edges.array(name="mean_elevation", data=mean_elevation_arr[mapping])
+    edges.array(name="glacier", data=glacier_arr[mapping])
+    edges.array(name="ndvi", data=ndvi_arr[mapping])
+    edges.array(name="meanTa", data=meanTa_arr[mapping])
+    edges.array(name="seasonality_P", data=seasonality_P_arr[mapping])
+    edges.array(name="permeability", data=permeability_arr[mapping])
     
-    for name, attr in zip([
-        "aridity",
-        "Porosity",
-        "meanP",
-        "meanelevation",
-        "glaciers",
-        "NDVI",
-        "meanTa",
-        "seasonality_P",
-        "permeability"
-    ], [
-        aridity_arr,
-        porosity_arr,
-        mean_p_arr,
-        mean_elevation_arr,
-        glacier_arr,
-        ndvi_arr,
-        meanTa_arr,
-        seasonality_P_arr,
-        permeability_arr
-    ]):
-        var = xr.DataArray(
-            data=attr[mapping].astype(np.float32),
-            coords={"comid": edge_merit_basins},
-            name=name
-        )
-        edges[name] = var
-    dt[str(cfg.zone)] = edges
-    dt.to_zarr(
-        store=cfg.create_edges.edges,
-        mode='a', 
-        consolidated=True
-    )
 
 
-def calculate_incremental_drainage_area(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
+def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> None:
     """
     Runs a Polars query to calculate the incremental drainage area for each edge in the MERIT dataset
     """
@@ -342,11 +255,10 @@ def calculate_incremental_drainage_area(cfg: DictConfig, edges: xr.Dataset, dt: 
     gdf = gpd.read_file(basin_file)
     _df = pd.DataFrame(gdf.drop(columns="geometry"))
     df = pl.from_pandas(_df)
-    df = df.with_columns(pl.col("COMID").cast(dtype=pl.Int32))  # convert COMID to Int32
     edges_df = pl.DataFrame(
         {
-            "COMID": edges.merit_basin.values,
-            "id": edges.id.values,
+            "COMID": edges.merit_basin[:],
+            "id": edges.id[:],
             "order": np.arange(edges.id.shape[0]),
         }
     )
@@ -366,30 +278,17 @@ def calculate_incremental_drainage_area(cfg: DictConfig, edges: xr.Dataset, dt: 
                 ).alias("incremental_drainage_area")
             ]
         )
-        .join(
-            other=edges_df.lazy().select(["COMID", "order"]),  # Only select needed columns
-            left_on="COMID", 
-            right_on="COMID", 
-            how="left"
-        )
+        .join(other=edges_df.lazy(), left_on="COMID", right_on="COMID", how="left")
         .sort(by="order")
         .collect()
     )
-    var = xr.DataArray(
-        data=result.select(pl.col("incremental_drainage_area")).to_numpy().squeeze().astype(np.float32),
-        coords={"comid": edges.merit_basin.values},
-        name="incremental_drainage_area"
-    )
-    edges["incremental_drainage_area"] = var
-    dt[str(cfg.zone)] = edges
-    dt.to_zarr(
-        store=cfg.create_edges.edges,
-        mode='a', 
-        consolidated=True
+    edges.array(
+        name="incremental_drainage_area",
+        data=result.select(pl.col("incremental_drainage_area")).to_numpy().squeeze(),
     )
 
 
-def calculate_q_prime_summation(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
+def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
     """Creates Q` summed data for all edges in a given MERIT zone
 
     Parameters:
@@ -413,7 +312,7 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataT
     dim_0: int = streamflow_zarr.time.shape[0]  # type: ignore
     dim_1: int = streamflow_zarr.COMID.shape[0]  # type: ignore
     edge_ids = np.array(edges.id[:])
-    edges_segment_sorting_index = cp.array(edges.segment_sorting_index.values)
+    edges_segment_sorting_index = cp.array(edges.segment_sorting_index[:])
     edge_index_mapping = {v: i for i, v in enumerate(edge_ids)}
 
     q_prime_np = np.zeros([dim_0, dim_1]).transpose(1, 0)
@@ -428,7 +327,7 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataT
         target = []
         for idx, _ in enumerate(
             tqdm(
-                edges.id.values,
+                edges.id[:],
                 desc="creating graph in dictionary form",
                 ascii=True,
                 ncols=140,
@@ -436,7 +335,7 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataT
         ):
             if edges.ds[idx] != "0_0":
                 source.append(idx)
-                target.append(edge_index_mapping[edges.ds.values[idx]])
+                target.append(edge_index_mapping[edges.ds[idx]])
         df = pd.DataFrame({"source": source, "target": target})
         df.to_csv(df_path, index=False)
     G = nx.from_pandas_edgelist(
@@ -483,7 +382,7 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataT
         del q_prime_cp
         del q_prime_np_edge_count_cp
         cp.get_default_memory_pool().free_all_blocks()
-    
+
     edges.array(
         name="summed_q_prime",
         data=q_prime_np.transpose(1, 0),
@@ -497,7 +396,7 @@ def map_last_edge_to_comid(arr):
     return unique_elements, last_indices
     
     
-def calculate_mean_p_summation(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
+def calculate_mean_p_summation(cfg: DictConfig, edges: zarr.Group) -> None:
     """Creates Q` summed data for all edges in a given MERIT zone
 
     Parameters:
@@ -509,8 +408,8 @@ def calculate_mean_p_summation(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTr
     """
     cp.cuda.runtime.setDevice(6)  # manually setting the device to 2
 
-    edge_comids = edges.merit_basin.values
-    edge_comids_cp = cp.array(edges.merit_basin.values)
+    edge_comids = edges.merit_basin[:]
+    edge_comids_cp = cp.array(edges.merit_basin[:])
     ordered_merit_basin, indices = map_last_edge_to_comid(edge_comids)
     ordered_merit_basin_cp = cp.array(ordered_merit_basin)
     indices_cp = cp.array(indices)
@@ -568,7 +467,7 @@ def calculate_mean_p_summation(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTr
     
     
     
-def calculate_q_prime_sum_stats(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
+def calculate_q_prime_sum_stats(cfg: DictConfig, edges: zarr.Group) -> None:
     """Creates Q` summed data for all edges in a given MERIT zone
 
     Parameters:
@@ -579,7 +478,7 @@ def calculate_q_prime_sum_stats(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataT
         The edges group in the MERIT zone
     """
     try:
-        summed_q_prime: np.ndarray = edges.summed_q_prime.values
+        summed_q_prime: np.ndarray = edges.summed_q_prime[:]
     except AttributeError:
         raise AttributeError("summed_q_prime data not found")
     edges.array(
@@ -599,7 +498,7 @@ def calculate_q_prime_sum_stats(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataT
         data=np.percentile(summed_q_prime, 10, axis=0),
     )         
     
-def format_lstm_forcings(cfg: DictConfig, edges: xr.Dataset, dt: xr.DataTree) -> None:
+def format_lstm_forcings(cfg: DictConfig, edges: zarr.Group) -> None:
     forcings_store = zarr.open(Path("/projects/mhpi/data/global/zarr_sub_zone") / f"{cfg.zone}")
 
     edge_comids = np.unique(edges.merit_basin[:])  # already sorted
