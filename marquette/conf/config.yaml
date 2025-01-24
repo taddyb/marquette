@@ -1,7 +1,7 @@
 name: MERIT
 data_path: /projects/mhpi/data/${name}
-zone: 71
-gpu: 6
+zone: 75
+gpu: 0
 create_edges:
   buffer: 0.3334
   dx: 2000
@@ -33,15 +33,15 @@ map_lake_points:
   lake_points: /projects/mhpi/data/hydroLakes/merit_intersected_data/RIV_lake_intersection_${zone}.shp
   zarr: /projects/mhpi/data/hydroLakes/hydrolakes.zarr 
 extensions:
-  - soils_data
-  - pet_forcing
-  - global_dhbv_static_inputs
-  - incremental_drainage_area
+  # - soils_data
+  # - pet_forcing
+  # - global_dhbv_static_inputs
+  # - incremental_drainage_area
   - q_prime_sum
-  - upstream_basin_avg_mean_p
-  - q_prime_sum_stats
-  - lstm_stats
-  - temp_mean
+  # - upstream_basin_avg_mean_p
+  # - q_prime_sum_stats
+  # - lstm_stats
+  # - temp_mean
 # Hydra Config ------------------------------------------------------------------------#
 hydra:
   help:

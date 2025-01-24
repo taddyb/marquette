@@ -1,9 +1,11 @@
 import logging
 from pathlib import Path
 
+import ast
 import binsparse
 import cupy as cp
 from cupyx.scipy import sparse as cp_sparse
+import dask.dataframe as dd
 import geopandas as gpd
 import networkx as nx
 import numpy as np
@@ -13,6 +15,7 @@ from scipy import sparse
 import zarr
 from omegaconf import DictConfig
 from tqdm import tqdm
+import xarray as xr
 
 log = logging.getLogger(__name__)
 
@@ -277,8 +280,8 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
     edges: zarr.Group
         The edges group in the MERIT zone
     """
-    n = 1  # number of splits (used for reducing memory load)
-    cp.cuda.runtime.setDevice(2)  # manually setting the device to 2
+    n = 10  # number of splits (used for reducing memory load)
+    cp.cuda.runtime.setDevice(0)  # manually setting the device to 2
 
     streamflow_group = Path(
         f"/projects/mhpi/data/MERIT/streamflow/zarr/{cfg.create_streamflow.version}/{cfg.zone}"
@@ -286,86 +289,78 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
     if streamflow_group.exists() is False:
         raise FileNotFoundError("streamflow_group data not found")
     streamflow_zarr: zarr.Group = zarr.open_group(streamflow_group, mode="r")
-    streamflow_time = streamflow_zarr.time[:]
-    # _, counts = cp.unique(edges.segment_sorting_index[:], return_counts=True)  # type: ignore
-    dim_0: int = streamflow_zarr.time.shape[0]  # type: ignore
-    dim_1: int = streamflow_zarr.COMID.shape[0]  # type: ignore
-    edge_ids = np.array(edges.id[:])
-    edges_segment_sorting_index = cp.array(edges.segment_sorting_index[:])
-    edge_index_mapping = {v: i for i, v in enumerate(edge_ids)}
+    
+    mapping_matrix = cfg.create_TMs.MERIT.TM
+    zarr_group = zarr.open_group(
+        Path(mapping_matrix),
+        mode="r",
+    )
+    sparse_zone = binsparse.read(zarr_group["TM"])
+    edge_mapped_streamflow = (streamflow_zarr.streamflow[:] @ sparse_zone).astype(np.float32)
 
-    q_prime_np = np.zeros([dim_0, dim_1]).transpose(1, 0)
-    streamflow_data = cp.array(streamflow_zarr.streamflow[:])
+    zone_uparea = edges.uparea[:]
+    coo = zarr.open_group(cfg.create_N.gage_coo_indices)[str(cfg.zone)].full_zone
+    sorted_indices = np.argsort(zone_uparea[coo.pairs[:, 0].astype(int)])
+    sorted_pairs = coo.pairs[sorted_indices]
+    
+    non_nan_pairs = sorted_pairs[~np.isnan(sorted_pairs[:, 1])].astype(np.int32)
+    df = pd.DataFrame(data={"source": non_nan_pairs[:, 1], "target": non_nan_pairs[:, 0]})
 
-    # Generating a networkx DiGraph object
-    df_path = Path(f"{cfg.create_edges.edges}").parent / f"{cfg.zone}_graph_df.csv"
-    if df_path.exists():
-        df = pd.read_csv(df_path)
-    else:
-        source = []
-        target = []
-        for idx, _ in enumerate(
-            tqdm(
-                edges.id[:],
-                desc="creating graph in dictionary form",
-                ascii=True,
-                ncols=140,
-            )
-        ):
-            if edges.ds[idx] != "0_0":
-                source.append(idx)
-                target.append(edge_index_mapping[edges.ds[idx]])
-        df = pd.DataFrame({"source": source, "target": target})
-        df.to_csv(df_path, index=False)
+    q_prime_matrix = np.eye(edge_mapped_streamflow.shape[1], edge_mapped_streamflow.shape[1], dtype=np.float32)
+    
     G = nx.from_pandas_edgelist(
         df=df,
         create_using=nx.DiGraph(),
     )
+    
+    all_descendants = {}
+    processed = set()
 
-    time_split = np.array_split(streamflow_time, n)  # type: ignore
-    for idx, time_range in enumerate(time_split):
-        q_prime_cp = cp.zeros([time_range.shape[0], dim_1]).transpose(1, 0)
-        q_prime_np_edge_count_cp = cp.zeros([time_range.shape[0], dim_1]).transpose(1, 0)
-        for jdx, _ in enumerate(
-            tqdm(
-                edge_ids,
-                desc=f"calculating q` sum data for part {idx}",
-                ascii=True,
-                ncols=140,
-            )
-        ):
-            streamflow_ds_id = edges_segment_sorting_index[jdx]
-            # num_edges_in_comid = counts[streamflow_ds_id]
-            try:
-                graph = nx.descendants(G, jdx, backend="cugraph")
-                graph.add(jdx)  # Adding the idx to ensure it's counted
-                downstream_idx = np.array(list(graph))  # type: ignore
-                downstream_comid_idx = cp.unique(
-                    edges_segment_sorting_index[downstream_idx]
-                )  # type: ignore
-                streamflow = streamflow_data[
-                    time_range, streamflow_ds_id
-                ]
-                q_prime_cp[downstream_comid_idx] += streamflow
-                q_prime_np_edge_count_cp[downstream_comid_idx] += 1
-            except nx.exception.NetworkXError:
-                # This means there is no connectivity from this basin. It's one-node graph
-                streamflow = streamflow_data[
-                    time_range, streamflow_ds_id
-                ]
-                q_prime_cp[streamflow_ds_id] = streamflow
-                q_prime_np_edge_count_cp[streamflow_ds_id] += 1
+    for idx in tqdm(non_nan_pairs[:, 1], desc="processing connections from pairs"):
+        if idx in processed:
+            continue
+        descendants = list(nx.dfs_preorder_nodes(G, source=idx))
+        for i in range(len(descendants)):
+            _idx = descendants[i]
+            if _idx in all_descendants.keys():
+                all_descendants[_idx].update(descendants[i:])
+            else:
+                all_descendants[_idx] = set(descendants[i:])
+            processed.add(_idx)
+            
+    rows = []
+    cols = []
+    for idx, descendents in tqdm(all_descendants.items(), desc="creating sparse q_prime matrix"):
+        rows.extend([idx] * len(descendents))
+        cols.extend(list(descendents))
 
-        print("Saving GPU Memory to CPU; freeing GPU Memory")
-        q_prime_np[:, time_range] = cp.asnumpy(q_prime_cp / q_prime_np_edge_count_cp)
-        del q_prime_cp
-        del q_prime_np_edge_count_cp
-        cp.get_default_memory_pool().free_all_blocks()
+    print("Writing sparse matrix")
+    rows = cp.array(rows)
+    cols = cp.array(cols)
+    sparse_q_prime_matrix = cp_sparse.csr_matrix(
+        (cp.ones(len(rows)), (rows, cols)), 
+        shape=q_prime_matrix.shape,
+        ).T
+    # for idx, descendents in tqdm(all_descendants.items(), desc="creating q_prime matrix"):
+    #     rows = np.array(idx)
+    #     cols = np.array(descendents)
+    #     q_prime_matrix[rows, cols] = 1 
+    
+    # print("Writing q_prime_matrix to sparse")
+    # sparse_q_prime_matrix = sparse.csr_matrix(q_prime_matrix.T)
+    # q_prime_matrix = cp.array(q_prime_matrix.T, dtype = cp.int8)\
+    print("Performing matrix multiplication")
+    q_prime_np = cp.asnumpy(cp.array(edge_mapped_streamflow, dtype=cp.float32) @ sparse_q_prime_matrix)
 
+
+    print("Saving GPU Memory to CPU; freeing GPU Memory")
     edges.array(
-        name="summed_q_prime",
-        data=q_prime_np.transpose(1, 0),
+        name="summed_q_prime_v2",
+        data=q_prime_np,
+        dtype=np.float32
     )
+    del sparse_q_prime_matrix
+    cp.get_default_memory_pool().free_all_blocks()
     
 def map_last_edge_to_comid(arr):
     unique_elements = np.unique(arr)
@@ -443,7 +438,6 @@ def calculate_mean_p_summation(cfg: DictConfig, edges: zarr.Group) -> None:
         name="upstream_basin_avg_mean_p",
         data=upstream_basin_avg_mean_p_np,
     )
-    
     
     
 def calculate_q_prime_sum_stats(cfg: DictConfig, edges: zarr.Group) -> None:
