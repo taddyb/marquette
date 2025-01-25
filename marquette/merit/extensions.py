@@ -14,7 +14,7 @@ import polars as pl
 from scipy import sparse
 import zarr
 from omegaconf import DictConfig
-from tqdm import tqdm
+from tqdm import tqdm, trange
 import xarray as xr
 
 log = logging.getLogger(__name__)
@@ -322,10 +322,10 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
         descendants = list(nx.dfs_preorder_nodes(G, source=idx))
         for i in range(len(descendants)):
             _idx = descendants[i]
-            if _idx in all_descendants.keys():
-                all_descendants[_idx].update(descendants[i:])
-            else:
-                all_descendants[_idx] = set(descendants[i:])
+            # if _idx in all_descendants.keys():
+            #     all_descendants[_idx].update(descendants[i:])
+            # else:
+            all_descendants[_idx] = descendants[i:]
             processed.add(_idx)
             
     rows = []
@@ -350,8 +350,16 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
     # sparse_q_prime_matrix = sparse.csr_matrix(q_prime_matrix.T)
     # q_prime_matrix = cp.array(q_prime_matrix.T, dtype = cp.int8)\
     print("Performing matrix multiplication")
-    q_prime_np = cp.asnumpy(cp.array(edge_mapped_streamflow, dtype=cp.float32) @ sparse_q_prime_matrix)
-
+    # q_prime_np = cp.asnumpy(cp.array(edge_mapped_streamflow, dtype=cp.float32) @ sparse_q_prime_matrix)
+    base_size = edge_mapped_streamflow.shape[0] // n
+    q_prime_np = np.zeros_like(edge_mapped_streamflow)
+    
+    for i in trange(n):
+        start = i * base_size
+        end = start + base_size if i < n-1 else edge_mapped_streamflow.shape[0]
+        q_prime_np[start:end] = cp.asnumpy(
+            cp.array(edge_mapped_streamflow[start:end], dtype=cp.float32) @ sparse_q_prime_matrix
+        )
 
     print("Saving GPU Memory to CPU; freeing GPU Memory")
     edges.array(
