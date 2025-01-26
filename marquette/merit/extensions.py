@@ -1,3 +1,4 @@
+from collections import defaultdict
 import logging
 from pathlib import Path
 
@@ -313,20 +314,18 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
         create_using=nx.DiGraph(),
     )
     
-    all_descendants = {}
-    processed = set()
+    all_descendants = defaultdict(set)
+    processed = np.zeros(np.max(non_nan_pairs) + 1, dtype=bool)
 
     for idx in tqdm(non_nan_pairs[:, 1], desc="processing connections from pairs"):
-        if idx in processed:
+        if processed[idx]:
             continue
         descendants = list(nx.dfs_preorder_nodes(G, source=idx))
         for i in range(len(descendants)):
             _idx = descendants[i]
-            # if _idx in all_descendants.keys():
-            #     all_descendants[_idx].update(descendants[i:])
-            # else:
-            all_descendants[_idx] = descendants[i:]
-            processed.add(_idx)
+            all_descendants[_idx].add(_idx)
+            all_descendants[_idx].update(descendants[:i])
+            processed[_idx] = True
             
     rows = []
     cols = []
