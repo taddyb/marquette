@@ -94,9 +94,9 @@ def pet_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
     pet_edge_data = []
     pet_comid_data = []
     mapping = np.empty_like(edge_merit_basins, dtype=int)
-    files = pet_file_path.glob("*")
-    for file in files:
-        pet_zone_data = zarr.open_group(file, mode="r")
+    pet_data = zarr.open_group(pet_file_path, mode="r")
+    for key in pet_data.keys():
+        pet_zone_data =pet_data[key]
         comids = pet_zone_data.COMID[:]
         pet = pet_zone_data.PET[:]
         pet_comid_data.append(comids)
@@ -133,16 +133,13 @@ def temp_forcing(cfg: DictConfig, edges: zarr.Group) -> None:
     temp_edge_data = []
     temp_comid_data = []
     mapping = np.empty_like(edge_merit_basins, dtype=int)
-    files = temp_file_path.glob("*")
-    for file in files:
-        try:
-            temp_zone_data = zarr.open_group(file, mode="r")
-            comids = temp_zone_data.COMID[:]
-            temp_mean = temp_zone_data.Temp[:]
-            temp_comid_data.append(comids)
-            temp_edge_data.append(temp_mean)
-        except zarr.errors.FSPathExistNotDir:
-            log.info(f"found non group file, skipping: {file}")
+    temp_data = zarr.open_group(temp_file_path, mode="r")
+    for key in temp_data.keys():
+        temp_zone_data =temp_data[key]
+        comids = temp_zone_data.COMID[:]
+        temp_mean = temp_zone_data.Temp[:]
+        temp_comid_data.append(comids)
+        temp_edge_data.append(temp_mean)
     temp_comid_arr = np.concatenate(temp_comid_data)
     temp_arr = np.concatenate(temp_edge_data)
 
@@ -184,17 +181,25 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
     mean_p_data = []
     mean_elevation_data = []
     glaciers_data = []
+    ndvi_data = []
+    meanTa_data = []
+    seasonality_P_data = []
+    permeability_data = []
 
     mapping = np.empty_like(edge_merit_basins, dtype=int)
-    files = file_path.glob("*")
-    for file in files:
-        pet_zone_data = zarr.open_group(file, mode="r")
+    root = zarr.open_group(file_path, mode="r")
+    for key in root.keys():
+        pet_zone_data = root[key]
         comids = pet_zone_data.COMID[:]
         aridity = pet_zone_data["attrs"]["aridity"][:]
         porosity = pet_zone_data["attrs"]["Porosity"][:]
         mean_p = pet_zone_data["attrs"]["meanP"][:]
         mean_elevation = pet_zone_data["attrs"]["meanelevation"][:]
         glaciers = pet_zone_data["attrs"]["glaciers"][:]
+        ndvi = pet_zone_data["attrs"]["NDVI"][:]
+        meanTa = pet_zone_data["attrs"]["meanTa"][:]
+        seasonality_P = pet_zone_data["attrs"]["seasonality_P"][:]
+        permeability = pet_zone_data["attrs"]["permeability"][:]
 
         comid_data.append(comids)
         aridity_data.append(aridity)
@@ -202,6 +207,10 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
         mean_p_data.append(mean_p)
         mean_elevation_data.append(mean_elevation)
         glaciers_data.append(glaciers)
+        ndvi_data.append(ndvi)
+        meanTa_data.append(meanTa)
+        seasonality_P_data.append(seasonality_P)
+        permeability_data.append(permeability)
 
     comid_arr = np.concatenate(comid_data)
     aridity_arr = np.concatenate(aridity_data)
@@ -209,6 +218,10 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
     mean_p_arr = np.concatenate(mean_p_data)
     mean_elevation_arr = np.concatenate(mean_elevation_data)
     glacier_arr = np.concatenate(glaciers_data)
+    ndvi_arr = np.concatenate(ndvi_data)
+    meanTa_arr = np.concatenate(meanTa_data)
+    seasonality_P_arr = np.concatenate(seasonality_P_data)
+    permeability_arr = np.concatenate(permeability_data)
 
     if comid_arr.shape[0] != len(np.unique(edge_merit_basins)):
         raise ValueError(
@@ -223,6 +236,10 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
     edges.array(name="mean_p", data=mean_p_arr[mapping])
     edges.array(name="mean_elevation", data=mean_elevation_arr[mapping])
     edges.array(name="glacier", data=glacier_arr[mapping])
+    edges.array(name="NDVI", data=ndvi_arr[mapping])
+    edges.array(name="meanTa", data=meanTa_arr[mapping])
+    edges.array(name="seasonality_P", data=seasonality_P_arr[mapping])
+    edges.array(name="permeability", data=permeability_arr[mapping])
 
 
 def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> None:
@@ -282,7 +299,7 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
         The edges group in the MERIT zone
     """
     n = 10  # number of splits (used for reducing memory load)
-    cp.cuda.runtime.setDevice(0)  # manually setting the device to 2
+    cp.cuda.runtime.setDevice(7)  # manually setting the device to 2
 
     streamflow_group = Path(
         f"/projects/mhpi/data/MERIT/streamflow/zarr/{cfg.create_streamflow.version}/{cfg.zone}"

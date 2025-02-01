@@ -31,8 +31,8 @@ def main(cfg: DictConfig) -> None:
         log.info(f"Creating MERIT {cfg.zone} River Graph")
         edges = create_edges(cfg)
 
-        # log.info(f"Creating MERIT {cfg.zone} Connectivity Matrix (N) for gages")
-        # create_N(cfg, edges)
+        log.info(f"Creating MERIT {cfg.zone} Connectivity Matrix (N) for gages")
+        create_N(cfg, edges)
 
         log.info(f"Mapping {cfg.zone} Streamflow to TMs")
         create_TMs(cfg, edges)
