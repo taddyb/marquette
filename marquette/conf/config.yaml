@@ -1,7 +1,7 @@
 name: MERIT
 data_path: /projects/mhpi/data/${name}
 zone: 73
-gpu: 0
+gpu: 7
 create_edges:
   buffer: 0.3334
   dx: 6000
@@ -34,6 +34,7 @@ map_lake_points:
   zarr: /projects/mhpi/data/hydroLakes/hydrolakes.zarr 
 extensions:
   - soils_data
+  - log_uparea
   # - pet_forcing
   - global_dhbv_static_inputs
   # - incremental_drainage_area

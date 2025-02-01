@@ -20,6 +20,11 @@ import xarray as xr
 
 log = logging.getLogger(__name__)
 
+def log_uparea(cfg: DictConfig, edges: zarr.Group) -> None:
+    uparea = edges.uparea[:]
+    log_uparea = np.log(uparea)
+    edges.array(name="log_uparea", data=log_uparea)
+
 
 def soils_data(cfg: DictConfig, edges: zarr.Group) -> None:
     flowline_file = (
@@ -299,7 +304,7 @@ def calculate_q_prime_summation(cfg: DictConfig, edges: zarr.Group) -> None:
         The edges group in the MERIT zone
     """
     n = 10  # number of splits (used for reducing memory load)
-    cp.cuda.runtime.setDevice(7)  # manually setting the device to 2
+    cp.cuda.runtime.setDevice(cfg.gpu)  # manually setting the device to 2
 
     streamflow_group = Path(
         f"/projects/mhpi/data/MERIT/streamflow/zarr/{cfg.create_streamflow.version}/{cfg.zone}"

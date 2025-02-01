@@ -68,6 +68,14 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
             log.info("soils information already exists in zarr format")
         else:
             soils_data(cfg, edges)
+    if "log_uparea" in cfg.extensions:
+        from marquette.merit.extensions import log_uparea
+
+        log.info("Adding log_uparea to your MERIT River Graph")
+        if "log_uparea" in edges:
+            log.info("log_uparea already exists in zarr format")
+        else:
+            log_uparea(cfg, edges)
     if "pet_forcing" in cfg.extensions:
         from marquette.merit.extensions import pet_forcing
 
