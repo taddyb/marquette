@@ -8,15 +8,15 @@ create_edges:
   edges: ${data_path}/zarr_v2/graph/CONUS/edges/
   flowlines: ${data_path}/raw/flowlines
 create_N:
-  run_whole_zone: True
+  run_whole_zone: False
   drainage_area_treshold: 0.1
   filter_based_on_dataset: True
   gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gage_9322_intersection.shp
   gage_coo_indices: ${data_path}/zarr_v2/gage_coo_indices
   pad_gage_id: True
   obs_dataset: ${data_path}/gage_information/obs_csvs/gages3000Info.csv
-  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_6km_merit_info.csv
-  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}_6km.csv
+  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_6km_merit_info_new_threshold.csv
+  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}_6km_new_threshold.csv
 create_TMs:
   MERIT:
     save_sparse: True

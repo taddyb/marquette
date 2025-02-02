@@ -90,6 +90,45 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         gdf["MERIT_ZONE"] = gdf["COMID"].astype(str).str[:2]
         filtered_gdf = gdf[gdf["MERIT_ZONE"] == str(prefix)]
         return filtered_gdf
+    
+    def find_upstream_das(zone_gdf, edges) -> tuple[np.ndarray, np.ndarray]:
+        """Finds the upstream drainage area at the flow-entry to each COMID"""
+        upstream_da = []
+        downstream_comid_da = []
+        for row in zone_gdf.itertuples():
+            upstream_comids = [
+                int(row[28]),
+                int(row[29]),
+                int(row[30]),
+                int(row[31]),
+            ]
+            down_id = int(row[26])
+            upareas = []
+            for comid in upstream_comids:
+                if comid != 0:
+                    idx = np.where(edges.merit_basin[:] == comid)[0]
+                    upareas.append(np.max(edges.uparea[idx]))
+            idx = np.where(edges.merit_basin[:] == down_id)[0]
+            down_uparea = edges.uparea[idx]
+            if down_uparea.shape[0] == 0:
+                downstream_comid_da.append(-1)
+            else:
+                downstream_comid_da.append(np.min(down_uparea))
+            upstream_da.append(sum(upareas))     
+        
+        return np.array(upstream_da), np.array(downstream_comid_da)
+    
+    def filter_by_das(zone_gdf, upstream_comid_da, downstream_comid_da):
+        """Filters out drainage areas based on if the gauge is in the correct COMID
+        """
+        zone_gdf = zone_gdf.copy()  # Creating a new reference
+        pour_point_da = zone_gdf["uparea"].values
+        zone_gdf["epsilon"] = 0.5 * (pour_point_da - upstream_comid_da)
+        mask_lb = zone_gdf["DRAIN_SQKM"] >= np.clip(a=(upstream_comid_da - zone_gdf["epsilon"]), a_min=0, a_max=None)
+        mask_ub = zone_gdf["DRAIN_SQKM"] <= pour_point_da + zone_gdf["epsilon"]
+        mask = np.logical_and(mask_lb, mask_ub)
+        return zone_gdf[mask]
+                    
 
     def find_closest_edge(
         row: gpd.GeoSeries,
@@ -161,32 +200,42 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
             else:
                 gage_ids = gage_locations_df["STAT_ID"]
         gdf = gdf[gdf["STAID"].isin(gage_ids)]
+        
+    # Step 1: filter by Zone
     gdf["COMID"] = gdf["COMID"].astype(int)
-    filtered_gdf = filter_by_comid_prefix(gdf, cfg.zone)
-    if len(filtered_gdf) == 0:
+    zone_gdf = filter_by_comid_prefix(gdf, cfg.zone)
+    if len(zone_gdf) == 0:
         log.info("No MERIT BASINS within this region")
         return False
-    grouped = filtered_gdf.groupby("STAID")
+    
+    # Step 2: find matching COMID
+    grouped = zone_gdf.groupby("STAID")
     unique_gdf = grouped.apply(choose_row_to_keep).reset_index(drop=True)
+    
+    # Step 3: ensure the DA of the gauge is located inside of the COMID
+    upstream_comid_da, downstream_comid_da= find_upstream_das(unique_gdf, edges)
+    filtered_gdf = filter_by_das(unique_gdf, upstream_comid_da, downstream_comid_da)
+    
+    # Step 4: match to a pour point
     zone_edge_ids = edges.id[:]
     zone_merit_basin_ids = edges.merit_basin[:]
     zone_upstream_areas = edges.uparea[:]
-    edge_info = unique_gdf.apply(
+    edge_info = filtered_gdf.apply(
         lambda row: find_closest_edge(
             row, zone_edge_ids, zone_merit_basin_ids, zone_upstream_areas
         ),
         axis=1,
         result_type="expand",
     )
-    unique_gdf["edge_intersection"] = edge_info[0]  # TODO check if the data is empty
-    unique_gdf["zone_edge_id"] = edge_info[1]
-    unique_gdf["zone_edge_uparea"] = edge_info[2]
-    unique_gdf["zone_edge_vs_gage_area_difference"] = edge_info[3]
-    unique_gdf["drainage_area_percent_error"] = edge_info[4]
-    unique_gdf["a_merit_a_usgs_ratio"] = edge_info[5]
-
+    filtered_gdf["edge_intersection"] = edge_info[0]  # TODO check if the data is empty
+    filtered_gdf["zone_edge_id"] = edge_info[1]
+    filtered_gdf["zone_edge_uparea"] = edge_info[2]
+    filtered_gdf["zone_edge_vs_gage_area_difference"] = edge_info[3]
+    filtered_gdf["drainage_area_percent_error"] = edge_info[4]
+    filtered_gdf["a_merit_a_usgs_ratio"] = edge_info[5]
+    
     result_df = unique_gdf[
-        unique_gdf["drainage_area_percent_error"] <= cfg.create_N.drainage_area_treshold
+        filtered_gdf["drainage_area_percent_error"] <= cfg.create_N.drainage_area_treshold
     ]
 
     try:
