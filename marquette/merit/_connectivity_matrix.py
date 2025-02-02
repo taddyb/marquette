@@ -234,7 +234,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
     filtered_gdf["drainage_area_percent_error"] = edge_info[4]
     filtered_gdf["a_merit_a_usgs_ratio"] = edge_info[5]
     
-    result_df = unique_gdf[
+    result_df = filtered_gdf[
         filtered_gdf["drainage_area_percent_error"] <= cfg.create_N.drainage_area_treshold
     ]
 
