@@ -107,14 +107,14 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
             for comid in upstream_comids:
                 if comid != 0:
                     idx = np.where(edges.merit_basin[:] == comid)[0]
-                    upareas.append(np.max(edges.uparea[idx]))
+                    upareas.append(np.min(edges.uparea[idx]))
             idx = np.where(edges.merit_basin[:] == down_id)[0]
             down_uparea = edges.uparea[idx]
             if down_uparea.shape[0] == 0:
                 downstream_comid_da.append(-1)
             else:
                 downstream_comid_da.append(np.min(down_uparea))
-            upstream_da.append(sum(upareas))     
+            upstream_da.append(np.max(np.array(upareas)) if len(upareas) > 0 else 0)
         
         return np.array(upstream_da), np.array(downstream_comid_da)
     
@@ -123,9 +123,14 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         """
         zone_gdf = zone_gdf.copy()  # Creating a new reference
         pour_point_da = zone_gdf["uparea"].values
-        zone_gdf["epsilon"] = 0.5 * (pour_point_da - upstream_comid_da)
-        mask_lb = zone_gdf["DRAIN_SQKM"] >= np.clip(a=(upstream_comid_da - zone_gdf["epsilon"]), a_min=0, a_max=None)
-        mask_ub = zone_gdf["DRAIN_SQKM"] <= pour_point_da + zone_gdf["epsilon"]
+        zone_gdf["upstream_comid_da"] = upstream_comid_da
+        ds_mask = downstream_comid_da == -1
+        downstream_comid_da[ds_mask] = pour_point_da[ds_mask]  # setting the downstream comid da to the pour point if no DS values
+        zone_gdf["downstream_comid_da"] = downstream_comid_da
+        zone_gdf["up_epsilon"] = 100
+        zone_gdf["ds_epsilon"] = 100 
+        mask_lb = zone_gdf["DRAIN_SQKM"] >= upstream_comid_da - zone_gdf["up_epsilon"] 
+        mask_ub = zone_gdf["DRAIN_SQKM"] <= downstream_comid_da + zone_gdf["ds_epsilon"]
         mask = np.logical_and(mask_lb, mask_ub)
         return zone_gdf[mask]
                     
