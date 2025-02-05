@@ -12,7 +12,7 @@ create_N:
   drainage_area_treshold: 0.1
   filter_based_on_dataset: True
   gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gage_9322_intersection.shp
-  gage_coo_indices: ${data_path}/zarr_v2/gage_coo_indices
+  gage_coo_indices: ${data_path}/zarr_v2.1/gage_coo_indices
   pad_gage_id: True
   obs_dataset: ${data_path}/gage_information/obs_csvs/gages3000Info.csv
   obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_6km_merit_info_new_threshold.csv
@@ -24,7 +24,7 @@ create_TMs:
     shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
 create_streamflow:
   version: merit_conus_v6.18_snow
-  data_store: ${data_path}/streamflow/zarr/${create_streamflow.version}/${zone}
+  data_store: ${data_path}/streamflow_/zarr/${create_streamflow.version}/${zone}
   obs_attributes: ${data_path}/gage_information/MERIT_basin_area_info
   predictions: /projects/mhpi/yxs275/DM_output/water_loss_model/dPL_local_daymet_new_attr_RMSEloss_with_log_2800
   start_date: 01-01-1980
