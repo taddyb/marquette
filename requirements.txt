@@ -26,4 +26,4 @@ shapely
 tornado
 tqdm
 xarray
-zarr
+zarr>=2,<3

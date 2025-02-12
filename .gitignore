@@ -166,3 +166,5 @@ cython_debug/
 .idea/
 tbindas/* 
 tbindas/.conda/*
+
+data

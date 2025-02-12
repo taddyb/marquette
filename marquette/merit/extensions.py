@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 from scipy import sparse
+from shapely.strtree import STRtree
 import zarr
 from omegaconf import DictConfig
 from tqdm import tqdm, trange
@@ -565,5 +566,37 @@ def format_lstm_forcings(cfg: DictConfig, edges: zarr.Group) -> None:
         name="aridity_comid",
         data=aridity_full_zone,
     )        
+    
+def calculate_hf_width(cfg: DictConfig, edges: zarr.Group):
+    zone = cfg.zone
+    log.info("reading basin shp file")
+    basin_widths = defaultdict(list)
+    basin_shp_file = Path(f"/projects/mhpi/data/MERIT/raw/basins/cat_pfaf_{zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp")
+    if basin_shp_file.exists() == False:
+        raise FileNotFoundError("Cannot find MERIT basin COMID data")
+    basin_gdf = gpd.read_file(filename=basin_shp_file).to_crs("EPSG:5070")
+    riv_shp_file = Path(f"/projects/mhpi/data/MERIT/raw/flowlines/riv_pfaf_{zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp")
+    if riv_shp_file.exists() == False:
+        raise FileNotFoundError("Cannot find MERIT flowlines COMID data")
+    riv_gdf = gpd.read_file(filename=riv_shp_file).to_crs("EPSG:5070")    
+    
+    log.info("reading hydrofabric")
+    hf_file = Path("/projects/mhpi/data/hydrofabric/v2.2/conus_nextgen.gpkg")
+    if hf_file.exists() == False:
+        raise FileNotFoundError("Cannot find MERIT flowlines COMID data")
+    hf_file = gpd.read_file(filename=hf_file, layer="divides").to_crs("EPSG:5070")  
+    
+    log.info("running intersection")
+    intersected_gdf = gpd.overlay(basin_gdf, hf_file, how='intersection')
+    
+    unique_comids = np.unique(intersected_gdf["COMID"])
+    zone_comids = np.unique(basin_gdf["COMID"])
+    missing_ids = np.setdiff1d(zone_comids, unique_comids)
+    missing_indices = basin_gdf.index[basin_gdf['COMID'].isin(missing_ids)].tolist()
+    missing_features = basin_gdf.iloc[missing_indices]
+    
+    for row in tqdm(missing_features.itertuples(), desc="Finding upstream hf width and depth"):
+        log.info(row)
+
     
 
