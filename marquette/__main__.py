@@ -147,6 +147,15 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
             log.info("q_prime_sum statistics already exists in zarr format")
         else:
             format_lstm_forcings(cfg, edges)
+        
+    if "hf_width" in cfg.extensions:
+        from marquette.merit.extensions import calculate_hf_width
+
+        log.info("Adding hf_width to your MERIT River Graph")
+        if "hf_v2.2_width" in edges:
+            log.info("hf_width already exists in zarr format")
+        else:
+            calculate_hf_width(cfg, edges)
 
 
 if __name__ == "__main__":
