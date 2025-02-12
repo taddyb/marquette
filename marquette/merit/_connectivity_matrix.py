@@ -239,17 +239,17 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
     filtered_gdf["drainage_area_percent_error"] = edge_info[4]
     filtered_gdf["a_merit_a_usgs_ratio"] = edge_info[5]
     
-    result_df = filtered_gdf[
-        filtered_gdf["drainage_area_percent_error"] <= cfg.create_N.drainage_area_treshold
-    ]
+    # result_df = filtered_gdf[
+    #     filtered_gdf["drainage_area_percent_error"] <= cfg.create_N.drainage_area_treshold
+    # ]
 
     try:
-        result_df["LNG_GAGE"] = result_df["LON_GAGE"]
-        result_df["LAT_GAGE"] = result_df["Latitude"]
+        filtered_gdf["LNG_GAGE"] = filtered_gdf["LON_GAGE"]
+        filtered_gdf["LAT_GAGE"] = filtered_gdf["Latitude"]
     except KeyError:
         pass
-    if "HUC02" not in result_df.columns:
-        result_df["HUC02"] = 0
+    if "HUC02" not in filtered_gdf.columns:
+        filtered_gdf["HUC02"] = 0
 
     columns = [
         "STAID",
@@ -268,7 +268,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         "drainage_area_percent_error",
         "a_merit_a_usgs_ratio",
     ]
-    result = result_df[columns]
+    result = filtered_gdf[columns]
     result = result.dropna()
     result["STAID"] = result["STAID"].astype(int)
     result.to_csv(Path(cfg.create_N.zone_obs_dataset), index=False)

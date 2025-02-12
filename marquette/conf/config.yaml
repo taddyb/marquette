@@ -1,6 +1,6 @@
 name: MERIT
 data_path: /projects/mhpi/data/${name}
-zone: 73
+zone: 74
 gpu: 7
 create_edges:
   buffer: 0.3334
@@ -15,8 +15,8 @@ create_N:
   gage_coo_indices: ${data_path}/zarr_v2.1/gage_coo_indices
   pad_gage_id: True
   obs_dataset: ${data_path}/gage_information/obs_csvs/gages3000Info.csv
-  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_6km_merit_info_new_threshold.csv
-  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}_6km_new_threshold.csv
+  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_6km_merit_info_v2_.csv
+  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/${zone}_6km_v2_.csv
 create_TMs:
   MERIT:
     save_sparse: True
@@ -39,6 +39,7 @@ extensions:
   - global_dhbv_static_inputs
   # - incremental_drainage_area
   - q_prime_sum
+  - hf_width
   # - upstream_basin_avg_mean_p
   # - q_prime_sum_stats
   # - lstm_stats
