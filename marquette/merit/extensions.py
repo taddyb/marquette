@@ -570,7 +570,6 @@ def format_lstm_forcings(cfg: DictConfig, edges: zarr.Group) -> None:
 def calculate_hf_width(cfg: DictConfig, edges: zarr.Group):
     zone = cfg.zone
     log.info("reading basin shp file")
-    basin_widths = defaultdict(list)
     basin_shp_file = Path(f"/projects/mhpi/data/MERIT/raw/basins/cat_pfaf_{zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp")
     if basin_shp_file.exists() == False:
         raise FileNotFoundError("Cannot find MERIT basin COMID data")
@@ -578,25 +577,68 @@ def calculate_hf_width(cfg: DictConfig, edges: zarr.Group):
     riv_shp_file = Path(f"/projects/mhpi/data/MERIT/raw/flowlines/riv_pfaf_{zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp")
     if riv_shp_file.exists() == False:
         raise FileNotFoundError("Cannot find MERIT flowlines COMID data")
-    riv_gdf = gpd.read_file(filename=riv_shp_file).to_crs("EPSG:5070")    
-    
-    log.info("reading hydrofabric")
-    hf_file = Path("/projects/mhpi/data/hydrofabric/v2.2/conus_nextgen.gpkg")
-    if hf_file.exists() == False:
-        raise FileNotFoundError("Cannot find MERIT flowlines COMID data")
-    hf_file = gpd.read_file(filename=hf_file, layer="divides").to_crs("EPSG:5070")  
+    riv_gdf = gpd.read_file(filename=riv_shp_file).to_crs("EPSG:5070") 
     
     log.info("running intersection")
-    intersected_gdf = gpd.overlay(basin_gdf, hf_file, how='intersection')
+    intersect_path = Path(f"/projects/mhpi/tbindas/marquette/data/{zone}_hf_intersections.gpkg")
+    if intersect_path.exists():
+        intersected_gdf = gpd.read_file(intersect_path)
+    else: 
+        log.info("reading hydrofabric")
+        hf_file = Path("/projects/mhpi/tbindas/marquette/data/conus_nextgen.gpkg")
+        if hf_file.exists() == False:
+            raise FileNotFoundError("Cannot find MERIT flowlines COMID data")
+        flowpath_attr = gpd.read_file(filename=hf_file, layer="flowpath-attributes-ml")
+        hf_file = gpd.read_file(filename=hf_file, layer="divides").to_crs("EPSG:5070")  
+        hf_df = hf_file.merge(flowpath_attr, on='id')
+        intersected_gdf = gpd.overlay(basin_gdf, hf_df, how='intersection')
+        intersected_gdf.to_file(intersect_path, driver="GPKG")
     
-    unique_comids = np.unique(intersected_gdf["COMID"])
+    merged_gdf = intersected_gdf.merge(riv_gdf, on='COMID')
+    merged_gdf['area_diff'] = abs(merged_gdf['uparea'] - merged_gdf['tot_drainage_areasqkm'])
+    cleaned_df = (merged_gdf.sort_values('area_diff')
+               .drop_duplicates(subset='COMID', keep='first')
+               .drop('area_diff', axis=1))
+
+    unique_comids = np.unique(cleaned_df["COMID"])
     zone_comids = np.unique(basin_gdf["COMID"])
     missing_ids = np.setdiff1d(zone_comids, unique_comids)
     missing_indices = basin_gdf.index[basin_gdf['COMID'].isin(missing_ids)].tolist()
     missing_features = basin_gdf.iloc[missing_indices]
     
-    for row in tqdm(missing_features.itertuples(), desc="Finding upstream hf width and depth"):
-        log.info(row)
-
+    basin_widths = {r[1]: r[28] for r in cleaned_df.itertuples()}
+    basin_depths = {r[1]: r[32] for r in cleaned_df.itertuples()}
     
-
+    default_width = np.percentile(cleaned_df["TopWdth"].values[~np.isnan(cleaned_df["TopWdth"].values)], 5)
+    default_depth = np.percentile(cleaned_df["Y"].values[~np.isnan(cleaned_df["Y"].values)], 5)
+    
+    for row in tqdm(missing_features.itertuples(), desc="filling nans or gaps"):
+        starting_comid = row[1]
+        r = cleaned_df[cleaned_df["COMID"] == starting_comid]
+        next_id = starting_comid
+        use_default = False
+        while len(r) == 0:
+            try:
+                next_id = riv_gdf[riv_gdf["COMID"] == next_id]["NextDownID"].values[0]
+            except IndexError:
+                use_default = True
+                break
+            r = cleaned_df[cleaned_df["COMID"] == next_id]
+        if use_default:
+            basin_widths[starting_comid] = default_width
+            basin_depths[starting_comid] = default_depth
+        else:
+            basin_widths[starting_comid] = r["TopWdth"].values[0]
+            basin_depths[starting_comid] = r["Y"].values[0]
+    
+    basins = edges.merit_basin[:]
+    widths = np.array([basin_widths[basin] for basin in basins])
+    depths = np.array([basin_depths[basin] for basin in basins])
+    edges.array(
+        name="hf_v2.2_width",
+        data=widths,
+    )    
+    edges.array(
+        name="hf_v2.2_depth",
+        data=depths,
+    )  
