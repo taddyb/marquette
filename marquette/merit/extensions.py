@@ -607,9 +607,11 @@ def calculate_hf_width(cfg: DictConfig, edges: zarr.Group):
     missing_features = basin_gdf.iloc[missing_indices]
     
     basin_widths = {r[1]: r[28] for r in cleaned_df.itertuples()}
+    basin_bottom_widths = {r[1]: r[27] for r in cleaned_df.itertuples()}
     basin_depths = {r[1]: r[32] for r in cleaned_df.itertuples()}
     
     default_width = np.percentile(cleaned_df["TopWdth"].values[~np.isnan(cleaned_df["TopWdth"].values)], 5)
+    default_btm_width = np.percentile(cleaned_df["BtmWdth"].values[~np.isnan(cleaned_df["BtmWdth"].values)], 5)
     default_depth = np.percentile(cleaned_df["Y"].values[~np.isnan(cleaned_df["Y"].values)], 5)
     
     for row in tqdm(missing_features.itertuples(), desc="filling nans or gaps"):
@@ -617,6 +619,7 @@ def calculate_hf_width(cfg: DictConfig, edges: zarr.Group):
         r = cleaned_df[cleaned_df["COMID"] == starting_comid]
         next_id = starting_comid
         use_default = False
+        count = 0
         while len(r) == 0:
             try:
                 next_id = riv_gdf[riv_gdf["COMID"] == next_id]["NextDownID"].values[0]
@@ -624,21 +627,33 @@ def calculate_hf_width(cfg: DictConfig, edges: zarr.Group):
                 use_default = True
                 break
             r = cleaned_df[cleaned_df["COMID"] == next_id]
+            if count == 15:
+                # avoiding infinite loops
+                use_default = True
+                break
+            count += 1
         if use_default:
             basin_widths[starting_comid] = default_width
+            basin_bottom_widths[starting_comid] = default_btm_width
             basin_depths[starting_comid] = default_depth
         else:
             basin_widths[starting_comid] = r["TopWdth"].values[0]
+            basin_bottom_widths[starting_comid] = r["BtmWdth"].values[0]
             basin_depths[starting_comid] = r["Y"].values[0]
     
     basins = edges.merit_basin[:]
     widths = np.array([basin_widths[basin] for basin in basins])
+    btm_widths = np.array([basin_bottom_widths[basin] for basin in basins])
     depths = np.array([basin_depths[basin] for basin in basins])
     edges.array(
-        name="hf_v2.2_width",
+        name="hf_v22_width",
         data=widths,
     )    
     edges.array(
-        name="hf_v2.2_depth",
+        name="hf_v22_depth",
         data=depths,
-    )  
+    )
+    edges.array(
+        name="hf_v22_btm_width",
+        data=btm_widths,
+    )

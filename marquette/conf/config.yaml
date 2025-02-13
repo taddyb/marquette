@@ -8,7 +8,7 @@ create_edges:
   edges: ${data_path}/zarr_v2/graph/CONUS/edges/
   flowlines: ${data_path}/raw/flowlines
 create_N:
-  run_whole_zone: False
+  run_whole_zone: True
   drainage_area_treshold: 0.1
   filter_based_on_dataset: True
   gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/gage_9322_intersection.shp

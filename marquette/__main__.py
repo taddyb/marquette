@@ -40,8 +40,8 @@ def main(cfg: DictConfig) -> None:
         log.info("Mapping Lake Pour Points to Edges")
         map_lake_points(cfg, edges)
 
-        log.info("Converting Streamflow to zarr")
-        write_streamflow(cfg, edges)
+        # log.info("Converting Streamflow to zarr")
+        # write_streamflow(cfg, edges)
 
         log.info("Running Data Post-Processing Extensions")
         run_extensions(cfg, edges)
@@ -152,7 +152,7 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         from marquette.merit.extensions import calculate_hf_width
 
         log.info("Adding hf_width to your MERIT River Graph")
-        if "hf_v2.2_width" in edges:
+        if "hf_v22_btm_width" in edges:
             log.info("hf_width already exists in zarr format")
         else:
             calculate_hf_width(cfg, edges)
