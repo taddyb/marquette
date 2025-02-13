@@ -573,11 +573,11 @@ def calculate_hf_width(cfg: DictConfig, edges: zarr.Group):
     basin_shp_file = Path(f"/projects/mhpi/data/MERIT/raw/basins/cat_pfaf_{zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp")
     if basin_shp_file.exists() == False:
         raise FileNotFoundError("Cannot find MERIT basin COMID data")
-    basin_gdf = gpd.read_file(filename=basin_shp_file).to_crs("EPSG:5070")
+    basin_gdf = gpd.read_file(filename=basin_shp_file).set_crs("EPSG:4326").to_crs("EPSG:5070")
     riv_shp_file = Path(f"/projects/mhpi/data/MERIT/raw/flowlines/riv_pfaf_{zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp")
     if riv_shp_file.exists() == False:
         raise FileNotFoundError("Cannot find MERIT flowlines COMID data")
-    riv_gdf = gpd.read_file(filename=riv_shp_file).to_crs("EPSG:5070") 
+    riv_gdf = gpd.read_file(filename=riv_shp_file).set_crs("EPSG:4326").to_crs("EPSG:5070") 
     
     log.info("running intersection")
     intersect_path = Path(f"/projects/mhpi/tbindas/marquette/data/{zone}_hf_intersections.gpkg")
@@ -609,11 +609,13 @@ def calculate_hf_width(cfg: DictConfig, edges: zarr.Group):
     basin_widths = {r[1]: r[28] for r in cleaned_df.itertuples()}
     basin_bottom_widths = {r[1]: r[27] for r in cleaned_df.itertuples()}
     basin_depths = {r[1]: r[32] for r in cleaned_df.itertuples()}
+    basin_side_slope = {r[1]: r[29] for r in cleaned_df.itertuples()}
     
     default_width = np.percentile(cleaned_df["TopWdth"].values[~np.isnan(cleaned_df["TopWdth"].values)], 5)
     default_btm_width = np.percentile(cleaned_df["BtmWdth"].values[~np.isnan(cleaned_df["BtmWdth"].values)], 5)
     default_depth = np.percentile(cleaned_df["Y"].values[~np.isnan(cleaned_df["Y"].values)], 5)
-    
+    default_side_slope = np.percentile(cleaned_df["ChSlp"].values[~np.isnan(cleaned_df["ChSlp"].values)], 5)
+ 
     for row in tqdm(missing_features.itertuples(), desc="filling nans or gaps"):
         starting_comid = row[1]
         r = cleaned_df[cleaned_df["COMID"] == starting_comid]
@@ -636,15 +638,18 @@ def calculate_hf_width(cfg: DictConfig, edges: zarr.Group):
             basin_widths[starting_comid] = default_width
             basin_bottom_widths[starting_comid] = default_btm_width
             basin_depths[starting_comid] = default_depth
+            basin_side_slope[starting_comid] = default_side_slope
         else:
             basin_widths[starting_comid] = r["TopWdth"].values[0]
             basin_bottom_widths[starting_comid] = r["BtmWdth"].values[0]
             basin_depths[starting_comid] = r["Y"].values[0]
+            basin_side_slope[starting_comid] = r["ChSlp"].values[0]
     
     basins = edges.merit_basin[:]
     widths = np.array([basin_widths[basin] for basin in basins])
     btm_widths = np.array([basin_bottom_widths[basin] for basin in basins])
     depths = np.array([basin_depths[basin] for basin in basins])
+    ch_slope = np.array([basin_side_slope[basin] for basin in basins])
     edges.array(
         name="hf_v22_width",
         data=widths,
@@ -657,3 +662,8 @@ def calculate_hf_width(cfg: DictConfig, edges: zarr.Group):
         name="hf_v22_btm_width",
         data=btm_widths,
     )
+    edges.array(
+        name="hf_v22_ch_slope",
+        data=ch_slope,
+    )
+
