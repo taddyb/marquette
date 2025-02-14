@@ -1,6 +1,6 @@
 name: MERIT
 data_path: /projects/mhpi/data/${name}
-zone: 74
+zone: 71
 gpu: 7
 create_edges:
   buffer: 0.3334
@@ -40,6 +40,7 @@ extensions:
   # - incremental_drainage_area
   - q_prime_sum
   - hf_width
+  - stream_geo_attr
   # - upstream_basin_avg_mean_p
   # - q_prime_sum_stats
   # - lstm_stats
