@@ -667,3 +667,44 @@ def calculate_hf_width(cfg: DictConfig, edges: zarr.Group):
         data=ch_slope,
     )
 
+def calculate_stream_geo_attr(cfg: DictConfig, edges: zarr.Group):
+    zone = cfg.zone
+    log.info("reading stream_geo store")
+    file_path = Path(f"/projects/mhpi/yxs275/River_geometry/CONUS_forward/")
+    if file_path.exists() is False:
+        raise FileNotFoundError("global_dhbv_static_inputs data not found")
+    edge_merit_basins: np.ndarray = edges.merit_basin[:]
+    comid_data = []
+    width_data = []
+    depth_data = []
+
+    mapping = np.empty_like(edge_merit_basins, dtype=int)
+    root = zarr.open_group(file_path, mode="r")
+    for key in root.keys():
+        if str(zone) in str(key):
+            log.info(f"Reading: {key}")
+            zone_data = root[key]
+            comids = zone_data.COMID[:].astype(np.int32)
+            width = zone_data.width[:]
+            depth = zone_data.depth[:]
+
+            comid_data.append(comids)
+            width_data.append(width)
+            depth_data.append(depth)
+    
+    comid_arr = np.concatenate(comid_data)
+    width_arr = np.concatenate(width_data)
+    depth_arr = np.concatenate(depth_data)
+
+    mask = np.isin(edge_merit_basins, comid_arr)  # note, this is mapping to the edges, not the comids
+    width_mapped = np.zeros(len(edge_merit_basins))
+    depth_mapped = np.zeros(len(edge_merit_basins))
+
+    sorter = np.argsort(comid_arr)
+    indices = sorter[np.searchsorted(comid_arr[sorter], edge_merit_basins[mask])]
+
+    width_mapped[mask] = width_arr[indices]
+    depth_mapped[mask] = depth_arr[indices]
+    
+    edges.array(name="stream_geos_width", data=width_mapped)
+    edges.array(name="stream_geos_depth", data=depth_mapped)
