@@ -96,7 +96,7 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         from marquette.merit.extensions import global_dhbv_static_inputs
 
         log.info("Adding global dHBV static input data to your MERIT River Graph")
-        if "aridity" in edges:
+        if "SoilGrids1km_sand" in edges:
             log.info("global_dhbv_static_inputs already exists in zarr format")
         else:
             global_dhbv_static_inputs(cfg, edges)

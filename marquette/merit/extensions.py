@@ -191,6 +191,9 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
     meanTa_data = []
     seasonality_P_data = []
     permeability_data = []
+    sand_data = []
+    silt_data = []
+    clay_data = []
 
     mapping = np.empty_like(edge_merit_basins, dtype=int)
     root = zarr.open_group(file_path, mode="r")
@@ -206,6 +209,10 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
         meanTa = pet_zone_data["attrs"]["meanTa"][:]
         seasonality_P = pet_zone_data["attrs"]["seasonality_P"][:]
         permeability = pet_zone_data["attrs"]["permeability"][:]
+        SoilGrids1km_sand = pet_zone_data["attrs"]["SoilGrids1km_sand"][:]
+        SoilGrids1km_silt = pet_zone_data["attrs"]["SoilGrids1km_silt"][:]
+        SoilGrids1km_clay = pet_zone_data["attrs"]["SoilGrids1km_clay"][:]
+
 
         comid_data.append(comids)
         aridity_data.append(aridity)
@@ -217,6 +224,9 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
         meanTa_data.append(meanTa)
         seasonality_P_data.append(seasonality_P)
         permeability_data.append(permeability)
+        sand_data.append(SoilGrids1km_sand)
+        silt_data.append(SoilGrids1km_silt)
+        clay_data.append(SoilGrids1km_clay)
 
     comid_arr = np.concatenate(comid_data)
     aridity_arr = np.concatenate(aridity_data)
@@ -228,6 +238,9 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
     meanTa_arr = np.concatenate(meanTa_data)
     seasonality_P_arr = np.concatenate(seasonality_P_data)
     permeability_arr = np.concatenate(permeability_data)
+    sand_data_arr = np.concatenate(sand_data)
+    silt_data_arr = np.concatenate(silt_data)
+    clay_data_arr = np.concatenate(clay_data)
 
     if comid_arr.shape[0] != len(np.unique(edge_merit_basins)):
         raise ValueError(
@@ -246,6 +259,9 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
     edges.array(name="meanTa", data=meanTa_arr[mapping])
     edges.array(name="seasonality_P", data=seasonality_P_arr[mapping])
     edges.array(name="permeability", data=permeability_arr[mapping])
+    edges.array(name="SoilGrids1km_sand", data=sand_data_arr[mapping])
+    edges.array(name="SoilGrids1km_silt", data=silt_data_arr[mapping])
+    edges.array(name="SoilGrids1km_clay", data=clay_data_arr[mapping])
 
 
 def calculate_incremental_drainage_area(cfg: DictConfig, edges: zarr.Group) -> None:

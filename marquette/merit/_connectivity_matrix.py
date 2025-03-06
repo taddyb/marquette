@@ -95,14 +95,14 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         """Finds the upstream drainage area at the flow-entry to each COMID"""
         upstream_da = []
         downstream_comid_da = []
-        for row in zone_gdf.itertuples():
+        for _, row in zone_gdf.iterrows():
             upstream_comids = [
-                int(row[28]),
-                int(row[29]),
-                int(row[30]),
-                int(row[31]),
+                int(row["up1"]),
+                int(row["up2"]),
+                int(row["up3"]),
+                int(row["up4"]),
             ]
-            down_id = int(row[26])
+            down_id = int(row["NextDownID"])
             upareas = []
             for comid in upstream_comids:
                 if comid != 0:
@@ -225,6 +225,8 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
     zone_edge_ids = edges.id[:]
     zone_merit_basin_ids = edges.merit_basin[:]
     zone_upstream_areas = edges.uparea[:]
+    # test_row = filtered_gdf.iloc[0]
+    # edge_info = find_closest_edge(test_row, zone_edge_ids, zone_merit_basin_ids, zone_upstream_areas)
     edge_info = filtered_gdf.apply(
         lambda row: find_closest_edge(
             row, zone_edge_ids, zone_merit_basin_ids, zone_upstream_areas
