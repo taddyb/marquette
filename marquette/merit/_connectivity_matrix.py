@@ -186,17 +186,18 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
             ratio,
         )
 
-    gdf = gpd.read_file(Path(cfg.create_N.gage_buffered_flowline_intersections))
+    # gdf = gpd.read_file(Path(cfg.create_N.gage_buffered_flowline_intersections))
+    gdf = gpd.read_file(Path(cfg.create_N.flowline_path))
     if cfg.create_N.filter_based_on_dataset:
         # filter based on large-list of gage_locations
         gage_locations_df = pd.read_csv(cfg.create_N.obs_dataset)
         try:
             if cfg.create_N.pad_gage_id:
                 gage_ids = (
-                    gage_locations_df["id"].astype(str).apply(lambda x: x.zfill(8))
+                    gage_locations_df["STAID"].astype(str).apply(lambda x: x.zfill(8))
                 )
             else:
-                gage_ids = gage_locations_df["id"]
+                gage_ids = gage_locations_df["STAID"]
         except KeyError:
             if cfg.create_N.pad_gage_id:
                 gage_ids = (
@@ -204,22 +205,23 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
                 )
             else:
                 gage_ids = gage_locations_df["STAT_ID"]
-        gdf = gdf[gdf["STAID"].isin(gage_ids)]
+        gdf = gdf[gdf["COMID"].isin(gage_locations_df["COMID"])]
+        gdf = gdf.merge(gage_locations_df, on="COMID", how="inner")
         
     # Step 1: filter by Zone
-    gdf["COMID"] = gdf["COMID"].astype(int)
-    zone_gdf = filter_by_comid_prefix(gdf, cfg.zone)
-    if len(zone_gdf) == 0:
-        log.info("No MERIT BASINS within this region")
-        return False
+    gdf.loc[:, "COMID"] = gdf["COMID"].astype(int)
+    # zone_gdf = filter_by_comid_prefix(gdf, cfg.zone)
+    # if len(zone_gdf) == 0:
+    #     log.info("No MERIT BASINS within this region")
+    #     return False
     
     # Step 2: find matching COMID
-    grouped = zone_gdf.groupby("STAID")
+    grouped = gdf.groupby("STAID")
     unique_gdf = grouped.apply(choose_row_to_keep).reset_index(drop=True)
     
     # Step 3: ensure the DA of the gauge is located inside of the COMID
-    upstream_comid_da, downstream_comid_da= find_upstream_das(unique_gdf, edges)
-    filtered_gdf = filter_by_das(unique_gdf, upstream_comid_da, downstream_comid_da)
+    # upstream_comid_da, downstream_comid_da= find_upstream_das(unique_gdf, edges)
+    # filtered_gdf = filter_by_das(unique_gdf, upstream_comid_da, downstream_comid_da)
     
     # Step 4: match to a pour point
     zone_edge_ids = edges.id[:]
@@ -227,40 +229,40 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
     zone_upstream_areas = edges.uparea[:]
     # test_row = filtered_gdf.iloc[0]
     # edge_info = find_closest_edge(test_row, zone_edge_ids, zone_merit_basin_ids, zone_upstream_areas)
-    edge_info = filtered_gdf.apply(
+    edge_info = unique_gdf.apply(
         lambda row: find_closest_edge(
             row, zone_edge_ids, zone_merit_basin_ids, zone_upstream_areas
         ),
         axis=1,
         result_type="expand",
     )
-    filtered_gdf["edge_intersection"] = edge_info[0]  # TODO check if the data is empty
-    filtered_gdf["zone_edge_id"] = edge_info[1]
-    filtered_gdf["zone_edge_uparea"] = edge_info[2]
-    filtered_gdf["zone_edge_vs_gage_area_difference"] = edge_info[3]
-    filtered_gdf["drainage_area_percent_error"] = edge_info[4]
-    filtered_gdf["a_merit_a_usgs_ratio"] = edge_info[5]
+    unique_gdf["edge_intersection"] = edge_info[0]  # TODO check if the data is empty
+    unique_gdf["zone_edge_id"] = edge_info[1]
+    unique_gdf["zone_edge_uparea"] = edge_info[2]
+    unique_gdf["zone_edge_vs_gage_area_difference"] = edge_info[3]
+    unique_gdf["drainage_area_percent_error"] = edge_info[4]
+    unique_gdf["a_merit_a_usgs_ratio"] = edge_info[5]
     
     # result_df = filtered_gdf[
     #     filtered_gdf["drainage_area_percent_error"] <= cfg.create_N.drainage_area_treshold
     # ]
 
-    try:
-        filtered_gdf["LNG_GAGE"] = filtered_gdf["LON_GAGE"]
-        filtered_gdf["LAT_GAGE"] = filtered_gdf["Latitude"]
-    except KeyError:
-        pass
-    if "HUC02" not in filtered_gdf.columns:
-        filtered_gdf["HUC02"] = 0
+    # try:
+    #     filtered_gdf["LNG_GAGE"] = filtered_gdf["LON_GAGE"]
+    #     filtered_gdf["LAT_GAGE"] = filtered_gdf["Latitude"]
+    # except KeyError:
+    #     pass
+    # if "HUC02" not in filtered_gdf.columns:
+    #     filtered_gdf["HUC02"] = 0
 
     columns = [
         "STAID",
         # "STANAME",
         # "MERIT_ZONE",
-        "HUC02",
+        # "HUC02",
         "DRAIN_SQKM",
-        "LAT_GAGE",
-        "LNG_GAGE",
+        # "LAT_GAGE",
+        # "LNG_GAGE",
         # "STATE",
         "COMID",
         "edge_intersection",
@@ -270,7 +272,7 @@ def map_gages_to_zone(cfg: DictConfig, edges: zarr.Group) -> gpd.GeoDataFrame:
         "drainage_area_percent_error",
         "a_merit_a_usgs_ratio",
     ]
-    result = filtered_gdf[columns]
+    result = unique_gdf[columns]
     result = result.dropna()
     result["STAID"] = result["STAID"].astype(int)
     result.to_csv(Path(cfg.create_N.zone_obs_dataset), index=False)
