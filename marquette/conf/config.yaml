@@ -11,12 +11,13 @@ create_N:
   run_whole_zone: False
   drainage_area_treshold: 0.1
   filter_based_on_dataset: True
-  gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/large_basin_formatted_intersection.shp
-  gage_coo_indices: ${data_path}/zarr_v2.1/gage_coo_indices
-  pad_gage_id: False
-  obs_dataset: ${data_path}/gage_information/obs_csvs/gages3000Info.csv
-  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_6km_merit_info_v2_.csv
-  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/large_basin_6km_${zone}.csv
+  flowline_path: ${data_path}/raw/flowlines/riv_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
+  # gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/large_basin_formatted_intersection.shp
+  gage_coo_indices: ${data_path}/zarr_v2.8/gage_coo_indices
+  pad_gage_id: True
+  obs_dataset: /projects/mhpi/tbindas/marquette/marquette/conf/obs_ref/obs_2860.csv
+  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_6km_merit_info_v8.csv
+  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/large_basin_6km_${zone}_v8.csv
 create_TMs:
   MERIT:
     save_sparse: True
