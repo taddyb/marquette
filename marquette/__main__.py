@@ -161,7 +161,7 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         from marquette.merit.extensions import calculate_stream_geo_attr
 
         log.info("Adding stream_geo_attr to your MERIT River Graph")
-        if "stream_geo_width" in edges:
+        if "stream_geos_width" in edges:
             log.info("stream_geo_attr already exists in zarr format")
         else:
             calculate_stream_geo_attr(cfg, edges) 
