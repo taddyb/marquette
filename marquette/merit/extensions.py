@@ -724,3 +724,33 @@ def calculate_stream_geo_attr(cfg: DictConfig, edges: zarr.Group):
     
     edges.array(name="stream_geos_width", data=width_mapped)
     edges.array(name="stream_geos_depth", data=depth_mapped)
+    
+    
+
+def calculate_if_lake(cfg: DictConfig, edges: zarr.Group) -> None:
+    """
+    Runs a Polars query to calculate the incremental drainage area for each edge in the MERIT dataset
+    """
+    basin_file = (
+        Path(cfg.data_path)
+        / f"raw/flowlines/riv_pfaf_{cfg.zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp"
+    )
+    hydrosheds = (
+        "/projects/mhpi/data/hydroLakes/HydroLAKES_polys_v10_shp/HydroLAKES_polys_v10.shp"
+    )
+
+    merit_gdf = gpd.read_file(basin_file)
+    lakes_gdf = gpd.read_file(hydrosheds)    
+    
+    if lakes_gdf.crs != merit_gdf.crs:
+        lakes_gdf.to_crs(merit_gdf.crs)
+    
+    intersection_gdf = gpd.overlay(merit_gdf, lakes_gdf, how='intersection')
+    intersect = intersection_gdf.dissolve(by='COMID', aggfunc='first').reset_index()["COMID"]
+    
+    merit_basin = edges.merit_basin[:]
+    mask = np.in1d(merit_basin, intersect)
+    contains_lake = np.zeros_like(merit_basin)
+    contains_lake[mask] = 1.0
+    
+    edges.array(name="contains_lake", data=contains_lake, dtype=np.float32)

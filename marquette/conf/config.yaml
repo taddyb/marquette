@@ -14,10 +14,10 @@ create_N:
   flowline_path: ${data_path}/raw/flowlines/riv_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
   # gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/large_basin_formatted_intersection.shp
   gage_coo_indices: ${data_path}/zarr_v2.7/gage_coo_indices
-  pad_gage_id: False
-  obs_dataset: /projects/mhpi/tbindas/marquette/marquette/conf/obs_ref/chapter_2_exp.csv
-  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/chapter_2_exp.csv
-  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/chapter_2_exp${zone}.csv
+  pad_gage_id: True
+  obs_dataset: /projects/mhpi/tbindas/marquette/marquette/conf/obs_ref/obs_2000.csv
+  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_6km_merit_info_v7.csv
+  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/large_basin_6km_${zone}_v7.csv
 create_TMs:
   MERIT:
     save_sparse: True
@@ -42,6 +42,7 @@ extensions:
   - q_prime_sum
   - hf_width
   - stream_geo_attr
+  - contains_lake
   # - upstream_basin_avg_mean_p
   # - q_prime_sum_stats
   # - lstm_stats
