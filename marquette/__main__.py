@@ -165,7 +165,15 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
             log.info("stream_geo_attr already exists in zarr format")
         else:
             calculate_stream_geo_attr(cfg, edges) 
-            
+        
+    if "contains_lake" in cfg.extensions:
+        from marquette.merit.extensions import calculate_if_lake
+
+        log.info("Adding contains_lake to your MERIT River Graph")
+        if "contains_lake" in edges:
+            log.info("contains_lake already exists in zarr format")
+        else:
+            calculate_if_lake(cfg, edges) 
 
 
 if __name__ == "__main__":
