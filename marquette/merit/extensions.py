@@ -754,3 +754,67 @@ def calculate_if_lake(cfg: DictConfig, edges: zarr.Group) -> None:
     contains_lake[mask] = 1.0
     
     edges.array(name="contains_lake", data=contains_lake, dtype=np.float32)
+    
+    
+def map_hydrofabric_v22_roughness(cfg: DictConfig, edges: zarr.Group) -> None:
+    basin_file = (
+        Path(cfg.data_path)
+        / f"raw/flowlines/riv_pfaf_{cfg.zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp"
+    )
+    hf = (
+        "/projects/mhpi/data/hydrofabric/v2.2/conus_nextgen.gpkg"
+    )
+    merit_gdf = gpd.read_file(basin_file)
+    fp_a_ml = gpd.read_file(hf, layer="flowpath-attributes-ml") 
+    fp_a = gpd.read_file(hf, layer="flowpath-attributes")   
+    network = gpd.read_file(hf, layer="network")   
+    divides = gpd.read_file(hf, layer="divides")   
+    divides = divides.set_index("divide_id") 
+    
+    if divides.crs != merit_gdf.crs:
+        divides = divides.to_crs(merit_gdf.crs)
+    
+    linkage = network[["id", "divide_id"]]
+    linkage = linkage[linkage['id'].notna()]
+    linkage = linkage[
+        (~linkage['id'].str.startswith('nex-')) & 
+        (~linkage['id'].str.startswith('tnx-'))
+    ] 
+    linkage = linkage.drop_duplicates()       
+    linkage = linkage.set_index("id")
+    fp_a_ml = fp_a_ml.set_index("id")
+    fp_a = fp_a.set_index("id")
+    n_ml_dict = fp_a_ml['n'].to_dict()
+    n_dict = fp_a['n'].to_dict()
+    linkage['n_ml'] = linkage.index.map(lambda x: n_ml_dict.get(x))
+    linkage['n'] = linkage.index.map(lambda x: n_dict.get(x))
+    linkage = linkage.reset_index(drop=False)
+    linkage = linkage.set_index("divide_id")
+    n_ml_dict = linkage['n_ml'].to_dict()
+    n_dict = linkage['n'].to_dict()
+    ml_nanmean = np.nanmean(list(n_ml_dict.values()))
+    nanmean = np.nanmean(list(n_dict.values()))
+    
+    divides['n_ml'] = divides.index.map(lambda x: n_ml_dict.get(x))
+    divides['n_ml'] = divides['n_ml'].fillna(ml_nanmean)
+    divides['n'] = divides.index.map(lambda x: n_dict.get(x))
+    divides['n'] = divides['n'].fillna(nanmean)
+    
+    print("intersecting hydrofabric with MERIT")
+    intersection_gdf = gpd.overlay(merit_gdf, divides, how='intersection')
+    intersect = intersection_gdf.dissolve(by='COMID', aggfunc='first').reset_index()
+    
+    merit_basin = edges.merit_basin[:]
+
+    hydrofabric_v22_ml_roughness = np.zeros_like(merit_basin, dtype=np.float32)
+    hydrofabric_v22_roughness = np.zeros_like(merit_basin, dtype=np.float32)
+    
+    comid_to_n_ml = dict(zip(intersect["COMID"], intersect["n_ml"]))
+    comid_to_n = dict(zip(intersect["COMID"], intersect["n"]))
+    
+    for i, comid in tqdm(enumerate(merit_basin), desc="mapping roughness to edges", total=merit_basin.shape[0]):
+        hydrofabric_v22_ml_roughness[i] = comid_to_n_ml.get(comid, ml_nanmean)
+        hydrofabric_v22_roughness[i] = comid_to_n.get(comid, nanmean)
+    
+    edges.array(name="hydrofabric_v22_ml_roughness", data=hydrofabric_v22_ml_roughness, dtype=np.float32)
+    edges.array(name="hydrofabric_v22_roughness", data=hydrofabric_v22_roughness, dtype=np.float32)
