@@ -1,34 +1,69 @@
 name: MERIT
-data_path: /data/tkb5476/projects/marquette/data/
-dx: 2000
-buffer: 0.3334
-units: mm/day
-date_codes: ${data_path}/date_codes.json
-is_streamflow_split: true
-start_date: 01-01-1980
-end_date: 12-31-2020
-drainage_area_treshold: 0.1
-continent: 7
-area: 4
-num_partitions: 64
-zone: ${continent}${area}
-streamflow_version: dpl_v3
-filter: False
-pad_gage_id: False
-save_paths:
-  gage_locations: ${data_path}/HUC/raw_observations/gages3000Info.csv
-  usgs_flowline_intersections: ${data_path}/HUC/raw_observations/large_basin_formatted_intersection.shp
-  attributes: ${data_path}/streamflow/attributes_dpl_v2.csv
-  basins: ${data_path}/${name}/raw/basins/cat_pfaf_${continent}${area}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
-  flow_lines: ${data_path}/${name}/raw/flowlines
-  huc10: ${data_path}/HUC/raw_observations/huc_10_CONUS.shp
-  streamflow_files: ${data_path}/streamflow/predictions/${streamflow_version}/
-csv:
-  gage_information: ${data_path}/MERIT/gage_information/large_basin_merit_info.csv
-  zone_gage_information: ${data_path}/MERIT/gage_information/large_basin_${zone}.csv
-zarr:
-  edges: ${data_path}/${name}/zarr/graph/edges/
-  gage_coo_indices: ${data_path}/MERIT/zarr/gage_coo_indices
-  HUC_TM: ${data_path}/${name}/zarr/TMs/PFAF_${continent}${area}
-  MERIT_TM: ${data_path}/${name}/zarr/TMs/MERIT_FLOWLINES_${continent}${area}
-  streamflow: ${data_path}/streamflow/zarr/${streamflow_version}/${zone}
+data_path: /projects/mhpi/data/${name}
+zone: 73
+zgpu: 7
+create_edges:
+  buffer: 0.3334
+  dx: 6000
+  edges: ${data_path}/zarr_v2/graph/CONUS/edges/
+  flowlines: ${data_path}/raw/flowlines
+create_N:
+  run_whole_zone: False
+  drainage_area_treshold: 0.1
+  filter_based_on_dataset: True
+  flowline_path: ${data_path}/raw/flowlines/riv_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
+  # gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/large_basin_formatted_intersection.shp
+  gage_coo_indices: ${data_path}/zarr_v2.7/gage_coo_indices
+  pad_gage_id: False
+  obs_dataset: /projects/mhpi/tbindas/marquette/marquette/conf/obs_ref/grdc_conus_v1.csv
+  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/grdc_6km_v1.csv
+  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/large_basin_grdc_6km_${zone}_v1.csv
+create_TMs:
+  MERIT:
+    save_sparse: True
+    TM: ${data_path}/zarr_v2/TMs/sparse_MERIT_FLOWLINES_${zone}
+    shp_files: ${data_path}/raw/basins/cat_pfaf_${zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp
+create_streamflow:
+  version: merit_conus_v6.18_snow
+  data_store: ${data_path}/streamflow_/zarr/${create_streamflow.version}/${zone}
+  obs_attributes: ${data_path}/gage_information/MERIT_basin_area_info
+  predictions: /projects/mhpi/yxs275/DM_output/water_loss_model/dPL_local_daymet_new_attr_RMSEloss_with_log_2800
+  start_date: 01-01-1980
+  end_date: 12-31-2020
+map_lake_points:
+  lake_points: /projects/mhpi/data/hydroLakes/merit_intersected_data/RIV_lake_intersection_${zone}.shp
+  zarr: /projects/mhpi/data/hydroLakes/hydrolakes.zarr 
+extensions:
+  - soils_data
+  - log_uparea
+  # - pet_forcing
+  - global_dhbv_static_inputs
+  # - incremental_drainage_area
+  - q_prime_sum
+  - hf_width
+  - stream_geo_attr
+  - contains_lake
+  - hydrofabric_v22_roughness
+  # - upstream_basin_avg_mean_p
+  # - q_prime_sum_stats
+  # - lstm_stats
+  # - temp_mean
+# Hydra Config ------------------------------------------------------------------------#
+hydra:
+  help:
+    app_name: marquette
+    header: == ${hydra.help.app_name} ==
+    template: |-
+      ${hydra.help.header}
+  
+      A data pipeline tool used to generate inputs to dMC river routing
+      By Tadd Bindas
+
+      ${hydra.help.footer}
+    footer: |-
+      Powered by Hydra (https://hydra.cc)
+      Use --hydra-help to view Hydra specific help
+  job:
+    name: ${name}
+  run:
+    dir: ../runs/${hydra.job.name}_${zone}/${now:%Y-%m-%d_%H-%M-%S}

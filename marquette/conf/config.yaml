@@ -1,6 +1,6 @@
 name: MERIT
 data_path: /projects/mhpi/data/${name}
-zone: 74
+zone: 73
 zgpu: 7
 create_edges:
   buffer: 0.3334

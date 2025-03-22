@@ -194,6 +194,7 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
     sand_data = []
     silt_data = []
     clay_data = []
+    fw_data = []
 
     mapping = np.empty_like(edge_merit_basins, dtype=int)
     root = zarr.open_group(file_path, mode="r")
@@ -201,6 +202,7 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
         pet_zone_data = root[key]
         comids = pet_zone_data.COMID[:]
         aridity = pet_zone_data["attrs"]["aridity"][:]
+        fw = pet_zone_data["attrs"]["FW"][:]
         porosity = pet_zone_data["attrs"]["Porosity"][:]
         mean_p = pet_zone_data["attrs"]["meanP"][:]
         mean_elevation = pet_zone_data["attrs"]["meanelevation"][:]
@@ -227,9 +229,11 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
         sand_data.append(SoilGrids1km_sand)
         silt_data.append(SoilGrids1km_silt)
         clay_data.append(SoilGrids1km_clay)
+        fw_data.append(fw)
 
     comid_arr = np.concatenate(comid_data)
     aridity_arr = np.concatenate(aridity_data)
+    fw_arr = np.concatenate(fw_data)
     porosity_arr = np.concatenate(porosity_data)
     mean_p_arr = np.concatenate(mean_p_data)
     mean_elevation_arr = np.concatenate(mean_elevation_data)
@@ -251,6 +255,7 @@ def global_dhbv_static_inputs(cfg: DictConfig, edges: zarr.Group) -> None:
         idx = np.where(edge_merit_basins == id)[0]
         mapping[idx] = i
     edges.array(name="aridity", data=aridity_arr[mapping])
+    edges.array(name="fw", data=fw_arr[mapping])
     edges.array(name="porosity", data=porosity_arr[mapping])
     edges.array(name="mean_p", data=mean_p_arr[mapping])
     edges.array(name="mean_elevation", data=mean_elevation_arr[mapping])
