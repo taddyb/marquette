@@ -175,14 +175,14 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         else:
             calculate_if_lake(cfg, edges) 
             
-    if "hydrofabric_v22_roughness" in cfg.extensions:
-        from marquette.merit.extensions import map_hydrofabric_v22_roughness
+    if "hydrofabric_v22" in cfg.extensions:
+        from marquette.merit.extensions import map_hydrofabric_v22
 
-        log.info("Adding hydrofabric_v22_roughness to your MERIT River Graph")
-        if "hydrofabric_v22_roughness" in edges:
-            log.info("hydrofabric_v22_roughness already exists in zarr format")
+        log.info("Adding hydrofabric_v22 attributes to your MERIT River Graph")
+        if "hydrofabric_v22_ch_slp" in edges:
+            log.info("hydrofabric_v22 attributes already exists in zarr format")
         else:
-            map_hydrofabric_v22_roughness(cfg, edges) 
+            map_hydrofabric_v22(cfg, edges) 
 
 
 if __name__ == "__main__":
