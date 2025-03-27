@@ -42,6 +42,7 @@ def merge(zone: str):
     df = pd.read_excel(file_path)
     geometry = [Point(xy) for xy in zip(df["dec_long_va"], df["dec_lat_va"])]
     gdf = gpd.GeoDataFrame(df, geometry=geometry, crs="EPSG:4326")
+    gdf = gdf.to_crs("EPSG:5070")
     
     print("reading river gdf and buffering lines")
     # basin_shp_file = Path(f"/projects/mhpi/data/MERIT/raw/basins/cat_pfaf_{zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp")
@@ -53,19 +54,18 @@ def merge(zone: str):
     # basin_gdf = gpd.read_file(filename=basin_shp_file)    
     riv_gdf = gpd.read_file(filename=riv_shp_file).to_crs("EPSG:5070")  
     
-    riv_gdf.geometry = riv_gdf.buffer(200)
-    riv_gdf = riv_gdf.to_crs("EPSG:4326")
     
     print("Running spatial join")
-    matched_gdf = gpd.sjoin(left_df=gdf, right_df=riv_gdf, how='inner', predicate='intersects')
-    geometry = [Point(xy) for xy in zip(matched_gdf["dec_long_va"], matched_gdf["dec_lat_va"])]
-    point_gdf = gpd.GeoDataFrame(matched_gdf, geometry=geometry, crs="EPSG:4326")
+    matched_gdf = gpd.sjoin_nearest(left_df=gdf, right_df=riv_gdf, how='inner')
+    matched_gdf = matched_gdf.to_crs("EPSG:5070")
+    # geometry = [Point(xy) for xy in zip(matched_gdf["dec_long_va"], matched_gdf["dec_lat_va"])]
+    # point_gdf = gpd.GeoDataFrame(matched_gdf, geometry=geometry, crs="EPSG:4326")
         
     if "mean_observed_swot_width" not in root:
         json_ = {
-            "merit_COMID": point_gdf["COMID"].values,
-            "drainage_area": point_gdf["drain_area_va"].values * 2.58999,  # converting from mi^2 to km^2
-            "width": point_gdf["stream_wdth_va"].values * 0.3048,  # converting from feet to meters
+            "merit_COMID": matched_gdf["COMID"].values,
+            "drainage_area": matched_gdf["drain_area_va"].values * 2.58999,  # converting from mi^2 to km^2
+            "width": matched_gdf["stream_wdth_va"].values * 0.3048,  # converting from feet to meters
         }
         df = pl.DataFrame(
             data=json_,
@@ -94,9 +94,9 @@ def merge(zone: str):
         
     if "mean_observed_swot_depth" not in root:
         json_ = {
-            "merit_COMID": point_gdf["COMID"].values,
-            "drainage_area": point_gdf["drain_area_va"].values * 2.58999,  # converting from mi^2 to km^2
-            "mean_depth": point_gdf["mean_depth_va"].values * 0.3048,  # converting from feet to meters
+            "merit_COMID": matched_gdf["COMID"].values,
+            "drainage_area": matched_gdf["drain_area_va"].values * 2.58999,  # converting from mi^2 to km^2
+            "mean_depth": matched_gdf["mean_depth_va"].values * 0.3048,  # converting from feet to meters
         }
         df = pl.DataFrame(
             data=json_,
