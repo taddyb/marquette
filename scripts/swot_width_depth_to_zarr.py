@@ -31,7 +31,7 @@ def merge(zone: str):
     `uv pip install openpyxl`
     """
     print("reading zarr store and excel file")
-    root_path = Path(f"/projects/mhpi/data/MERIT/zarr/graph/CONUS/edges/{zone}")
+    root_path = Path(f"/projects/mhpi/data/MERIT/zarr_v2/graph/CONUS/edges/{zone}")
     if root_path.exists() is False:
         raise FileNotFoundError("Cannot find your Zarr store")
     root = zarr.open_group(root_path)
@@ -88,7 +88,7 @@ def merge(zone: str):
             if np.abs((measured_da - uparea) / uparea) < threshold:
                 width_np[idx] = measured_width
     
-        root.create_array(name="mean_observed_swot_width", data=width_np.astype(np.float32))
+        root.array(name="mean_observed_swot_width", data=width_np.astype(np.float32))
     else:
         print("width write has already been made")
         
