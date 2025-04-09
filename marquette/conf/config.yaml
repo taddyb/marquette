@@ -44,6 +44,7 @@ extensions:
   - stream_geo_attr
   - contains_lake
   - hydrofabric_v22
+  - chi
   # - upstream_basin_avg_mean_p
   # - q_prime_sum_stats
   # - lstm_stats

@@ -184,6 +184,15 @@ def run_extensions(cfg: DictConfig, edges: zarr.Group) -> None:
         else:
             map_hydrofabric_v22(cfg, edges) 
 
+    if "chi" in cfg.extensions:
+        from marquette.merit.extensions import map_chi
+
+        log.info("Adding chi to your MERIT River Graph")
+        if "chi" in edges:
+            log.info("chi already exists in zarr format")
+        else:
+            map_chi(cfg, edges) 
+
 
 if __name__ == "__main__":
     main()

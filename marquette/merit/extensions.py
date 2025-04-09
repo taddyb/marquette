@@ -850,3 +850,39 @@ def map_hydrofabric_v22(cfg: DictConfig, edges: zarr.Group) -> None:
     edges.array(name="hydrofabric_v22_ch_slp", data=hydrofabric_v22_ch_slope, dtype=np.float32)
     edges.array(name="hydrofabric_v22_ml_depth", data=hydrofabric_v22_ml_depth, dtype=np.float32)
     edges.array(name="hydrofabric_v22_depth", data=hydrofabric_v22_depth, dtype=np.float32)
+    
+
+def map_chi(cfg: DictConfig, edges: zarr.Group) -> None:
+    zone = cfg.zone
+    log.info("reading chi store")
+    file_path = Path(f"/projects/mhpi/data/hydrofabric/v2.2/chi_CONUS_cleaned.gpkg")
+
+    gdf = gpd.read_file(file_path)
+    basin_file = (
+        Path(cfg.data_path)
+        / f"raw/basins/cat_pfaf_{zone}_MERIT_Hydro_v07_Basins_v01_bugfix1.shp"
+    )
+    if basin_file.exists() is False:
+        raise FileNotFoundError("Basin file not found")
+    merit_gdf = gpd.read_file(basin_file).set_crs("EPSG:4326")
+    merit_gdf = merit_gdf.to_crs(epsg=5070)
+    gdf = gdf.to_crs(epsg=5070)
+    
+    joined_gdf = gdf.sjoin(merit_gdf, predicate='within', how='inner')
+    agg_gdf = joined_gdf.groupby("COMID").agg({
+        'chicb': 'mean',
+    }).reset_index()
+
+    edge_basins = edges.merit_basin[:]
+    mapped_chi = np.full_like(edge_basins, fill_value=-1.0, dtype=np.float32)
+
+    basin_to_chi = dict(zip(agg_gdf["COMID"].values, agg_gdf["chicb"].values))
+
+    unique_basins = np.unique(edge_basins)
+
+    for basin in tqdm(unique_basins, desc="mapping chi"):
+        if basin in basin_to_chi:
+            mask = (edge_basins == basin)
+            mapped_chi[mask] = basin_to_chi[basin]
+    
+    edges.array(name="chi", data=mapped_chi)
