@@ -872,11 +872,16 @@ def map_chi(cfg: DictConfig, edges: zarr.Group) -> None:
     agg_gdf = joined_gdf.groupby("COMID").agg({
         'chicb': 'mean',
     }).reset_index()
+    agg_gdf["chicb_max"] = joined_gdf.groupby("COMID").agg({
+        'chicb': 'max',
+    }).reset_index()["chicb"]
 
     edge_basins = edges.merit_basin[:]
     mapped_chi = np.full_like(edge_basins, fill_value=-1.0, dtype=np.float32)
+    mapped_max_chi = np.full_like(edge_basins, fill_value=-1.0, dtype=np.float32)
 
     basin_to_chi = dict(zip(agg_gdf["COMID"].values, agg_gdf["chicb"].values))
+    basin_to_chi_max = dict(zip(agg_gdf["COMID"].values, agg_gdf["chicb_max"].values))
 
     unique_basins = np.unique(edge_basins)
 
@@ -884,5 +889,7 @@ def map_chi(cfg: DictConfig, edges: zarr.Group) -> None:
         if basin in basin_to_chi:
             mask = (edge_basins == basin)
             mapped_chi[mask] = basin_to_chi[basin]
+            mapped_max_chi[mask] = basin_to_chi_max[basin]
     
-    edges.array(name="chi", data=mapped_chi)
+    # edges.array(name="chi", data=mapped_chi)
+    edges.array(name="chi_max", data=mapped_max_chi)
