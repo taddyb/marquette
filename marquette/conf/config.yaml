@@ -15,9 +15,9 @@ create_N:
   # gage_buffered_flowline_intersections: ${data_path}/gage_information/gage_flowline_intersections/large_basin_formatted_intersection.shp
   gage_coo_indices: ${data_path}/zarr_v2.7/gage_coo_indices
   pad_gage_id: True
-  obs_dataset: /projects/mhpi/tbindas/marquette/marquette/conf/obs_ref/obs_2000.csv
-  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_3000_6km_merit_info_v7.csv
-  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/large_basin_6km_${zone}_v7.csv
+  obs_dataset: /projects/mhpi/tbindas/marquette/marquette/conf/obs_ref/obs_4985.csv
+  obs_dataset_output: ${data_path}/gage_information/formatted_gage_csvs/gages_5000_6km_merit_info.csv
+  zone_obs_dataset: ${data_path}/gage_information/formatted_gage_csvs/5000_6km_${zone}.csv
 create_TMs:
   MERIT:
     save_sparse: True
