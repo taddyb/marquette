@@ -1,3 +1,6 @@
+> [!WARNING]
+> This repo is no longer being supported by the maintainer
+
 # Marquette
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Python](https://img.shields.io/pypi/pyversions/msmhelper)]()
